@@ -1,23 +1,20 @@
 # HVAC Quotation Management System
 
-![Java](https://img.shields.io/badge/Java-21-orange)
-![Spring Boot](https://img.shields.io/badge/SpringBoot-3-green)
-![React](https://img.shields.io/badge/React-18-blue)
+A full-stack quotation management platform developed to automate quotation preparation processes for HVAC products.
 
-A full-stack quotation management system built with **Spring Boot** and **React** to manage HVAC product configurations, dynamic pricing calculations and quotation generation.
-
-This application digitizes quotation preparation workflows that are traditionally handled with Excel and manual calculations.
+Many companies still prepare quotations manually using Excel and manual calculations.  
+This system digitalizes the process by enabling dynamic product configuration, automated pricing calculations and quotation generation.
 
 ---
 
-## 🚀 Technologies
+## Technologies
 
 ### Backend
-- Java 21
+- Java
 - Spring Boot
 - REST API
-- Apache POI (Excel operations)
-- Maven
+- Apache POI
+- SQLite
 
 ### Frontend
 - React
@@ -25,101 +22,73 @@ This application digitizes quotation preparation workflows that are traditionall
 - Axios
 - CSS
 
-### Database
-- SQLite
+---
 
-### Tools
-- Git
-- Maven
-- npm
+## Features
+
+- Dynamic HVAC product configuration
+- Measurement-based pricing engine
+- Automated quotation calculation
+- Excel price list import
+- Excel quotation export
+- REST API architecture
+- Modular backend structure
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
-React Frontend  
-↓  
-REST API  
-↓  
-Spring Boot Backend  
-↓  
-Database  
-
-Frontend communicates with the backend using REST APIs.
+```
+React Frontend (localhost:3000)
+            ↓
+Spring Boot REST API (localhost:8080)
+            ↓
+SQLite Database
+```
 
 ---
 
-## 📦 Core Features
-
-### Product Configuration
-Users can configure HVAC products with different dimensions and parameters.
-
-### Dynamic Pricing Engine
-The pricing engine calculates product prices dynamically based on selected parameters.
-
-### Customer Management
-Customers can be created and managed within the system.
-
-### Quotation Creation
-Users can generate quotations by selecting products and configurations.
-
-### Excel Price Import
-Product price lists can be imported directly from Excel files.
-
-### Excel Quotation Export
-Quotations can be exported as Excel documents.
-
-### Currency Support
-The system includes exchange rate functionality for price calculations.
-
----
-
-## 📂 Project Structure
+## Project Structure
 
 ```
 hvac-quotation-system
-
-backend
-├── src
-│   ├── api
-│   ├── pricing
-│   ├── repository
-│   ├── importer
-│   ├── dependency
-│   └── bootstrap
-├── resources
-└── pom.xml
-
-frontend
-├── src
-│   ├── components
-│   ├── pages
-│   ├── services
-│   └── styles
-├── public
-└── package.json
+│
+├── backend
+│   ├── src
+│   ├── resources
+│   └── pom.xml
+│
+├── frontend
+│   ├── src
+│   ├── public
+│   └── package.json
+│
+└── README.md
 ```
 
 ---
 
-## ⚙ Installation
+## Installation
 
-### Clone Repository
+### Clone the repository
 
 ```
-git clone https://github.com/yourusername/hvac-quotation-system.git
+git clone https://github.com/cfkaplann/hvac-quotation-system.git
 ```
 
 ---
 
 ### Backend Setup
 
+Open the backend project in Eclipse as a Maven project.
+
+Run the application:
+
 ```
-cd backend
-mvn spring-boot:run
+Run AppStarter.java
 ```
 
-Backend runs on:
+Backend will run at:
 
 ```
 http://localhost:8080
@@ -129,13 +98,25 @@ http://localhost:8080
 
 ### Frontend Setup
 
+Navigate to the frontend folder:
+
 ```
 cd frontend
+```
+
+Install dependencies:
+
+```
 npm install
+```
+
+Start the application:
+
+```
 npm start
 ```
 
-Frontend runs on:
+Frontend will run at:
 
 ```
 http://localhost:3000
@@ -143,55 +124,32 @@ http://localhost:3000
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
-Add application screenshots here.
+Add application screenshots here to demonstrate the UI.
 
 Example:
 
+- Product configuration screen
 - Quotation creation screen
-- Product selection modal
-- Customer management page
 - Generated quotation table
 
 ---
 
-## 🧠 Business Logic
+## Purpose of the Project
 
-The application includes a pricing engine that calculates product prices based on configurable parameters such as:
+This project was developed to replace manual Excel-based quotation preparation with a modern web-based application.
 
-- Width
-- Height
-- Diameter
-- Slot count
-- Product type
-
-The pricing data can be imported from Excel files, allowing price updates without modifying the application code.
+The system provides automated pricing calculations, product configuration capabilities and structured quotation generation.
 
 ---
 
-## 📌 Purpose of the Project
-
-The goal of this project is to build a digital quotation management system for HVAC manufacturers and distributors.
-
-Many companies still prepare quotations manually using Excel.  
-This system replaces that workflow with a modern web-based application.
-
----
-
-## 🚧 Future Improvements
-
-Possible future features:
-
-- User authentication
-- PDF quotation export
-- Online quotation sharing
-- Cloud database support
-- Multi-user support
-- Admin panel
-
----
-
-## 👨‍💻 Author
+## Author
 
 Developed by **Cebrail Kaplan**
+
+GitHub:  
+https://github.com/cfkaplann
+
+LinkedIn:  
+https://www.linkedin.com/in/cebrailkap
