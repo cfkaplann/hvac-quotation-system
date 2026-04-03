@@ -106,6 +106,14 @@ public class PricingService {
          }
      }
 
+        // ── Spot Yaylı: yayFiyati × 2 ──────────────────────
+        boolean spotYayli = secimler != null && secimler.values().stream()
+            .anyMatch(list -> list.contains("Spot Yaylı"));
+        if (spotYayli) {
+            double yayFiyati = com.teklif.repository.SistemAyarService.getDouble("yay_fiyati", 0.0);
+            if (yayFiyati > 0) toplam += yayFiyati * 2;
+        }
+
         return new PricingResult(
                 hamFiyat,
                 oranEkleri,
@@ -113,6 +121,60 @@ public class PricingService {
                 toplam
         );
     }
+ // =====================================================
+ // ⭐ KATEGORİ BAZLI HESAP
+ // =====================================================
+ public PricingResult fiyatHesapla(
+         PricingRequest req,
+         Map<OzellikTipi,List<String>> secimler,
+         String kategori){
+
+     ExcelHotReloadService.checkAndReload();
+
+     double hamFiyat = sqlService.hamFiyatGetir(req);
+     double oranEkleri = 0;
+     double motorEk = 0;
+
+     if (secimler != null) {
+         for (OzellikTipi tip : secimler.keySet()) {
+             Map<String, OzellikOran> oranMap = OzellikDeposu.oranlariGetir(tip, kategori);
+             if (oranMap == null) continue;
+             for (String secim : secimler.get(tip)) {
+                 OzellikOran oran = oranMap.get(secim);
+                 if (oran == null) continue;
+                 if (!oran.isSabit()) oranEkleri += hamFiyat * oran.getOran();
+             }
+         }
+     }
+
+     List<String> aksesuarlar = secimler != null ? secimler.get(OzellikTipi.AKSESUAR_TIPI) : null;
+     if (aksesuarlar != null) {
+         boolean motorVar = aksesuarlar.contains("Servo Motor 24V") || aksesuarlar.contains("Servo Motor230V");
+         if (motorVar && req.getMotorFiyati() != null) motorEk = req.getMotorFiyati() * 1.1;
+     }
+
+     double toplam = hamFiyat + oranEkleri + motorEk;
+     String sheet = req.getSheetName();
+     if (sheet != null && (sheet.startsWith("DMP") || sheet.startsWith("DAIDMP"))) {
+         if (aksesuarlar != null) {
+             for (String a : aksesuarlar) {
+                 double euro = AKSESUAR_EURO.getOrDefault(a, 0.0);
+                 if (euro > 0) toplam += KurService.cevir(euro, ParaBirimi.EUR);
+             }
+         }
+     }
+
+     // ── Spot Yaylı: yayFiyati × 2 ──────────────────────
+     boolean spotYayli2 = secimler != null && secimler.values().stream()
+         .anyMatch(list -> list.contains("Spot Yaylı"));
+     if (spotYayli2) {
+         double yayFiyati = com.teklif.repository.SistemAyarService.getDouble("yay_fiyati", 0.0);
+         if (yayFiyati > 0) toplam += yayFiyati * 2;
+     }
+
+     return new PricingResult(hamFiyat, oranEkleri, motorEk, toplam);
+ }
+
  // =====================================================
  // ⭐ MOTOR MAP DESTEKLİ YENİ HESAP
  // =====================================================

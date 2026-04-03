@@ -28,7 +28,7 @@ public class TeklifRestController {
 
     @GetMapping("/yeni-no")
     public ResponseEntity<?> yeniNo() {
-        try { return ResponseEntity.ok(Map.of("teklifNo", repo.yeniTeklifNo())); }
+        try { return ResponseEntity.ok(Map.of("teklifNo", repo.yeniTeklifNoPeek())); }
         catch (Exception e) { return ResponseEntity.internalServerError().body(Map.of("hata", e.getMessage())); }
     }
 

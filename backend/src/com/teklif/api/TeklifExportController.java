@@ -18,14 +18,19 @@ public class TeklifExportController {
     @Autowired
     TeklifRepository repo;
 
-    // ── PDF ──────────────────────────────────────────────────────
+    // ── PDF ──────────────────────────────────────────────
     @GetMapping("/{id}/pdf")
     public ResponseEntity<?> pdf(@PathVariable int id) {
         try {
             Teklif t = repo.idIleGetir(id)
                 .orElseThrow(() -> new RuntimeException("Teklif bulunamadı: " + id));
 
-            byte[] bytes = PdfExporter.exportToBytes(t);
+            // Teklifin para birimini kullan
+            ParaBirimi pb;
+            try { pb = ParaBirimi.valueOf(t.getParaBirimi()); }
+            catch (Exception e) { pb = ParaBirimi.TL; }
+
+            byte[] bytes = PdfExporter.exportToBytes(t, pb);
 
             return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -39,21 +44,18 @@ public class TeklifExportController {
         }
     }
 
-    // ── EXCEL ────────────────────────────────────────────────────
+    // ── EXCEL ─────────────────────────────────────────────
     @GetMapping("/{id}/excel")
-    public ResponseEntity<?> excel(
-            @PathVariable int id,
-            @RequestParam(defaultValue = "TRY") String paraBirimi) {
+    public ResponseEntity<?> excel(@PathVariable int id) {
         try {
             Teklif t = repo.idIleGetir(id)
                 .orElseThrow(() -> new RuntimeException("Teklif bulunamadı: " + id));
 
-            // TRY → TL alias desteği
+            // Teklifin kendi para birimini kullan
             ParaBirimi pb;
-            String pbStr = paraBirimi.toUpperCase();
-            if ("TRY".equals(pbStr) || "TL".equals(pbStr)) {
-                pb = ParaBirimi.TL;
-            } else {
+            String pbStr = t.getParaBirimi() != null ? t.getParaBirimi().toUpperCase() : "TL";
+            if ("TRY".equals(pbStr) || "TL".equals(pbStr)) pb = ParaBirimi.TL;
+            else {
                 try { pb = ParaBirimi.valueOf(pbStr); }
                 catch (Exception e) { pb = ParaBirimi.TL; }
             }

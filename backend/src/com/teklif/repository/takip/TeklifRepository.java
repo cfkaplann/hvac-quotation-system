@@ -14,6 +14,26 @@ import java.util.*;
 @Repository
 public class TeklifRepository {
 
+    // Sadece bir sonraki no'yu gösterir, artırmaz (form açılışında kullanılır)
+    public synchronized String yeniTeklifNoPeek() throws Exception {
+        int yil = LocalDate.now().getYear();
+        try (Connection c = ConnectionManager.getConnection()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO teklif_no_sequence (yil,son) VALUES (?,0) ON CONFLICT(yil) DO NOTHING")) {
+                ps.setInt(1, yil); ps.executeUpdate();
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT son FROM teklif_no_sequence WHERE yil=?")) {
+                ps.setInt(1, yil);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) return String.format("TKL-%d-%04d", yil, rs.getInt("son") + 1);
+                }
+            }
+        }
+        throw new RuntimeException("Teklif no uretilemedi!");
+    }
+
+    // Artırarak no üretir (sadece kaydet() içinde çağrılır)
     public synchronized String yeniTeklifNo() throws Exception {
         int yil = LocalDate.now().getYear();
         try (Connection c = ConnectionManager.getConnection()) {
@@ -77,7 +97,7 @@ public class TeklifRepository {
     }
 
     public Teklif kaydet(Teklif t) throws Exception {
-        if (t.getTeklifNo() == null || t.getTeklifNo().isEmpty()) t.setTeklifNo(yeniTeklifNo());
+        t.setTeklifNo(yeniTeklifNo()); // Her yeni teklif için sequence'i artır
         t.hesaplaToplam();
         String sql = "INSERT INTO teklif (teklif_no,revize_no,is_adi,musteri_id,teklif_tarihi,gecerlilik_tarihi,teklifi_veren,para_birimi,kdv_orani,ara_toplam,kdv_tutari,genel_toplam,durum,notlar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (Connection c = ConnectionManager.getConnection()) {
@@ -165,7 +185,7 @@ public class TeklifRepository {
     }
 
     private void kalemleriKaydet(Connection c, int teklifId, List<TeklifKalem> kalemler) throws SQLException {
-        String sql = "INSERT INTO teklif_kalem (teklif_id,sira_no,urun_kodu,urun_adi,adet,birim,birim_fiyat,iskonto,toplam,aciklama,genislik,yukseklik,uzunluk,cap,cerceve_tipi,damper_tipi,ral_kodu,montaj) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO teklif_kalem (teklif_id,sira_no,urun_kodu,urun_adi,adet,birim,birim_fiyat,iskonto,toplam,aciklama) VALUES (?,?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             int sira = 1;
             for (TeklifKalem k : kalemler) {
@@ -175,10 +195,6 @@ public class TeklifRepository {
                 ps.setInt(5, k.getAdet()); ps.setString(6, k.getBirim());
                 ps.setDouble(7, k.getBirimFiyat()); ps.setDouble(8, k.getIskonto());
                 ps.setDouble(9, k.getToplam()); ps.setString(10, k.getAciklama());
-                ps.setString(11, k.getGenislik()); ps.setString(12, k.getYukseklik());
-                ps.setString(13, k.getUzunluk());  ps.setString(14, k.getCap());
-                ps.setString(15, k.getCerceveTipi()); ps.setString(16, k.getDamperTipi());
-                ps.setString(17, k.getRalKodu()); ps.setString(18, k.getMontaj());
                 ps.addBatch();
             }
             ps.executeBatch();
@@ -199,10 +215,6 @@ public class TeklifRepository {
                     k.setBirim(rs.getString("birim")); k.setBirimFiyat(rs.getDouble("birim_fiyat"));
                     k.setIskonto(rs.getDouble("iskonto")); k.setToplam(rs.getDouble("toplam"));
                     k.setAciklama(rs.getString("aciklama"));
-                    k.setGenislik(rs.getString("genislik")); k.setYukseklik(rs.getString("yukseklik"));
-                    k.setUzunluk(rs.getString("uzunluk")); k.setCap(rs.getString("cap"));
-                    k.setCerceveTipi(rs.getString("cerceve_tipi")); k.setDamperTipi(rs.getString("damper_tipi"));
-                    k.setRalKodu(rs.getString("ral_kodu")); k.setMontaj(rs.getString("montaj"));
                     liste.add(k);
                 }
             }

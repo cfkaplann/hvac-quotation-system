@@ -14,26 +14,22 @@ public class DaireselAnemostadConfig {
 
 		return List.of(
 
-				// =====================
-				// DAİRESEL ANEMOSTAD
-				// =====================
-
-				new UrunKart("DANM_TAVN", UrunKategori.DAIRESEL_ANEMOSTAD, "Düz Kanatlı Kare Anemostad",
+				new UrunKart("DANM_TAVN", UrunKategori.DAIRESEL_ANEMOSTAD, "Dairesel Tavan Anemostad",
 						List.of(OzellikTipi.RAL, OzellikTipi.DAMPER_TIPI, OzellikTipi.MONTAJ),
-						Map.of(OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"), OzellikTipi.MONTAJ,
-								List.of("Vidalı", "Spot Yaylı"), OzellikTipi.DAMPER_TIPI,
-								List.of("Dampersiz", "Kelebek Kanatlı")
-
-						),
-						// 🔥 ZORUNLU ÖLÇÜLER
-						List.of(OlcuAlanTipi.NETIC_CAP)),
+						Map.of(OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"),
+								OzellikTipi.MONTAJ, List.of("Vidalı", "Spot Yaylı"),
+								OzellikTipi.DAMPER_TIPI, List.of("Dampersiz", "Kelebek Kanat Damperli")),
+						List.of(OlcuAlanTipi.NETIC_CAP),
+						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "120", "150", "160", "200", "250", "315")),
+						false, null),
 
 				new UrunKart("DANM_GEMI", UrunKategori.DAIRESEL_ANEMOSTAD, "Gemici Anemostad",
 						List.of(OzellikTipi.RAL, OzellikTipi.MONTAJ),
-						Map.of(OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"), OzellikTipi.MONTAJ,
-								List.of("Vidalı", "Spot Yaylı")), // 🔥 ZORUNLU ÖLÇÜLER
-						List.of(OlcuAlanTipi.NETIC_CAP))
-
+						Map.of(OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"),
+								OzellikTipi.MONTAJ, List.of("Vidalı", "Spot Yaylı")),
+						List.of(OlcuAlanTipi.NETIC_CAP),
+						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "120", "150", "200")),
+						false, null)
 		);
 	}
 }

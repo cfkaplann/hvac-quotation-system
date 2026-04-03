@@ -145,6 +145,112 @@ public class KareAnemostadConfig {
 
                 false,
                 kasaBogazMapEgrisel
+            ),
+
+            // =====================================================
+            // Qua 2W
+            // =====================================================
+            new UrunKart(
+                "KANM_2YON",
+                UrunKategori.KARE_ANEMOSTAD,
+                "Qua 2W",
+
+                List.of(OzellikTipi.MENFEZ_TIPI,
+                        OzellikTipi.RAL,
+                        OzellikTipi.DAMPER_TIPI,
+                        OzellikTipi.MONTAJ),
+
+                Map.of(
+                		OzellikTipi.RAL,
+                        List.of("Boyasız","Eloksal","Boyalı"),
+
+                        OzellikTipi.MONTAJ,
+                        List.of("Vidalı","Clip-in","Klipsli","Lay-in","Karolaj"),
+
+                        OzellikTipi.DAMPER_TIPI,
+                        List.of("Dampersiz","Paralel Damperli","Zıt Damperli"),
+
+                        OzellikTipi.MENFEZ_TIPI,
+                        List.of("Sabit İç Gövdeli","Sökülebilir İç Gövdeli")
+                ),
+
+                List.of(OlcuAlanTipi.KASA_WH, OlcuAlanTipi.BOGAZ_WH),
+
+                Map.of(
+                		 OlcuAlanTipi.KASA_WH,
+                         List.of(
+                             "265x265",
+                             "340x340",
+                             "415x415",
+                             "490x490",
+                             "565x565"
+                         ),
+
+                         OlcuAlanTipi.BOGAZ_WH,
+                         List.of(
+                             "150x150",
+                             "225x225",
+                             "300x300",
+                             "375x375",
+                             "450x450"
+                         )
+                ),
+
+                false,
+                kasaBogazMap
+            ),
+
+            // =====================================================
+            // Qua 3W
+            // =====================================================
+            new UrunKart(
+                "KANM_3YON",
+                UrunKategori.KARE_ANEMOSTAD,
+                "Qua 3W",
+
+                List.of(OzellikTipi.MENFEZ_TIPI,
+                        OzellikTipi.RAL,
+                        OzellikTipi.DAMPER_TIPI,
+                        OzellikTipi.MONTAJ),
+
+                Map.of(
+                		OzellikTipi.RAL,
+                        List.of("Boyasız","Eloksal","Boyalı"),
+
+                        OzellikTipi.MONTAJ,
+                        List.of("Vidalı","Clip-in","Klipsli","Lay-in","Karolaj"),
+
+                        OzellikTipi.DAMPER_TIPI,
+                        List.of("Dampersiz","Paralel Damperli","Zıt Damperli"),
+
+                        OzellikTipi.MENFEZ_TIPI,
+                        List.of("Sabit İç Gövdeli","Sökülebilir İç Gövdeli")
+                ),
+
+                List.of(OlcuAlanTipi.KASA_WH, OlcuAlanTipi.BOGAZ_WH),
+
+                Map.of(
+                		 OlcuAlanTipi.KASA_WH,
+                         List.of(
+                             "265x265",
+                             "340x340",
+                             "415x415",
+                             "490x490",
+                             "565x565"
+                         ),
+
+                         OlcuAlanTipi.BOGAZ_WH,
+                         List.of(
+                             "150x150",
+                             "225x225",
+                             "300x300",
+                             "375x375",
+                             "450x450"
+                         )
+                ),
+
+                false,
+                kasaBogazMap
             )
         );
     }

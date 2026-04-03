@@ -3,8 +3,10 @@ package com.teklif.export;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.*;
 import com.itextpdf.text.pdf.draw.LineSeparator;
+import com.teklif.model.ParaBirimi;
 import com.teklif.model.takip.Teklif;
 import com.teklif.model.takip.TeklifKalem;
+import com.teklif.pricing.KurService;
 
 import java.io.ByteArrayOutputStream;
 
@@ -29,6 +31,23 @@ public class PdfExporter {
     private static Font fontTd()      { return new Font(Font.FontFamily.HELVETICA, 9,  Font.NORMAL, WHITE); }
 
     public static byte[] exportToBytes(Teklif t) throws Exception {
+        return exportToBytes(t, null);
+    }
+
+    public static byte[] exportToBytes(Teklif t, ParaBirimi pb) throws Exception {
+        // Para birimi: parametre yoksa tekliften al
+        final ParaBirimi paraBirimi;
+        if (pb != null) {
+            paraBirimi = pb;
+        } else {
+            ParaBirimi tmp;
+            try {
+                String pbStr = t.getParaBirimi() == null ? "TL" : t.getParaBirimi().toUpperCase().trim();
+                if ("TRY".equals(pbStr)) pbStr = "TL";
+                tmp = ParaBirimi.valueOf(pbStr);
+            } catch (Exception e) { tmp = ParaBirimi.TL; }
+            paraBirimi = tmp;
+        }
 
         Document doc = new Document(PageSize.A4, 36, 36, 40, 40);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -120,9 +139,9 @@ public class PdfExporter {
             addTd(table, k.getUrunAdi(),                                              bg, Element.ALIGN_LEFT);
             addTd(table, String.valueOf(k.getAdet()),                                 bg, Element.ALIGN_CENTER);
             addTd(table, nvl(k.getBirim()),                                           bg, Element.ALIGN_CENTER);
-            addTd(table, fmt(k.getBirimFiyat()) + " " + t.getParaBirimi(),            bg, Element.ALIGN_RIGHT);
+            addTd(table, fmt(KurService.cevir(k.getBirimFiyat(), paraBirimi)) + paraBirimi.getSymbol(),            bg, Element.ALIGN_RIGHT);
             addTd(table, k.getIskonto() > 0 ? fmt(k.getIskonto()) + "%" : "—",       bg, Element.ALIGN_CENTER);
-            addTd(table, fmt(k.getToplam()) + " " + t.getParaBirimi(),                bg, Element.ALIGN_RIGHT);
+            addTd(table, fmt(KurService.cevir(k.getToplam(), paraBirimi)) + paraBirimi.getSymbol(),                bg, Element.ALIGN_RIGHT);
             alt = !alt;
         }
         doc.add(table);
@@ -133,9 +152,9 @@ public class PdfExporter {
         totals.setHorizontalAlignment(Element.ALIGN_RIGHT);
         totals.setWidths(new float[]{1.5f, 1f});
 
-        addTotalRow(totals, "Ara Toplam",                        fmt(t.getAraToplam())   + " " + t.getParaBirimi(), false);
-        addTotalRow(totals, "KDV (%" + (int)t.getKdvOrani()+")",fmt(t.getKdvTutari())   + " " + t.getParaBirimi(), false);
-        addTotalRow(totals, "GENEL TOPLAM",                      fmt(t.getGenelToplam()) + " " + t.getParaBirimi(), true);
+        addTotalRow(totals, "Ara Toplam",                        fmt(KurService.cevir(t.getAraToplam(), paraBirimi)) + paraBirimi.getSymbol(), false);
+        addTotalRow(totals, "KDV (%" + (int)t.getKdvOrani()+")",fmt(KurService.cevir(t.getKdvTutari(), paraBirimi)) + paraBirimi.getSymbol(), false);
+        addTotalRow(totals, "GENEL TOPLAM",                      fmt(KurService.cevir(t.getGenelToplam(), paraBirimi)) + paraBirimi.getSymbol(), true);
         doc.add(totals);
 
         // ── NOTLAR ───────────────────────────────────────────────

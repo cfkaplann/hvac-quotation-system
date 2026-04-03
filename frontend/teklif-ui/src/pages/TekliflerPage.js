@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getTeklifler, deleteTeklif, updateDurum, revizeTeklif } from '../services/api';
+import { getTeklifler, getTeklif, deleteTeklif, updateDurum, revizeTeklif } from '../services/api';
 import TeklifForm from '../components/TeklifForm';
 
 const DURUMLAR = ['', 'BEKLIYOR', 'ONAYLANDI', 'REDDEDILDI', 'REVIZE', 'IPTAL'];
@@ -53,46 +53,20 @@ function DurumMenu({ teklif, onRefresh }) {
 
 
 function ExcelBtn({ teklifId }) {
-  const [open, setOpen] = React.useState(false);
-  const opts = [
-    { label: '₺ TL', val: 'TRY' },
-    { label: '€ EUR', val: 'EUR' },
-    { label: '$ USD', val: 'USD' },
-  ];
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <button className="btn btn-secondary btn-sm" onClick={() => setOpen(o => !o)}>
-        XLS ▾
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: '110%', zIndex: 100,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 8, padding: '4px 0', minWidth: 90,
-          boxShadow: '0 4px 16px #0006',
-        }}
-          onMouseLeave={() => setOpen(false)}
-        >
-          {opts.map(o => (
-            <a key={o.val}
-              href={`http://localhost:8080/api/teklifler/${teklifId}/excel?paraBirimi=${o.val}`}
-              target="_blank" rel="noreferrer"
-              onClick={() => setOpen(false)}
-              style={{ display: 'block', padding: '7px 14px', fontSize: 13, color: 'var(--text)', textDecoration: 'none', cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              {o.label}
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
+    <a
+      href={`http://localhost:8080/api/teklifler/${teklifId}/excel`}
+      target="_blank" rel="noreferrer"
+      className="btn btn-secondary btn-sm"
+      style={{ textDecoration: 'none' }}
+    >
+      XLS
+    </a>
   );
 }
 
 
-export default function TekliflerPage({ onStatsChange }) {
+export default function TekliflerPage({ onStatsChange, kullanici }) {
   const [teklifler, setTeklifler]  = useState([]);
   const [loading, setLoading]      = useState(true);
   const [filtreDurum, setFiltreDurum] = useState('');
@@ -214,7 +188,7 @@ export default function TekliflerPage({ onStatsChange }) {
                       <DurumMenu teklif={t} onRefresh={load} />
                       <a className="btn btn-secondary btn-sm" href={`http://localhost:8080/api/teklifler/${t.id}/pdf`} target="_blank" rel="noreferrer" title="PDF indir">PDF</a>
                       <ExcelBtn teklifId={t.id} />
-                      <button className="btn btn-secondary btn-sm" onClick={() => { setEditTeklif(t); setFormOpen(true); }}>Düzenle</button>
+                      <button className="btn btn-secondary btn-sm" onClick={async () => { const r = await getTeklif(t.id); setEditTeklif(r.data); setFormOpen(true); }}>Düzenle</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => handleRevize(t.id)} title="Revize oluştur">↩</button>
                       <button className="btn btn-danger btn-sm" onClick={() => setConfirm(t.id)}>Sil</button>
                     </div>
@@ -230,6 +204,7 @@ export default function TekliflerPage({ onStatsChange }) {
       {formOpen && (
         <TeklifForm
           teklif={editTeklif}
+          kullanici={kullanici}
           onSave={() => { setFormOpen(false); load(); }}
           onClose={() => setFormOpen(false)}
         />

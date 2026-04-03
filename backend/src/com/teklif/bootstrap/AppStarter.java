@@ -1,5 +1,6 @@
 package com.teklif.bootstrap;
 
+import com.teklif.db.ConnectionManager;
 import com.teklif.db.SchemaInitializer;
 import com.teklif.importer.MasterExcelImporter;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -10,6 +11,8 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.ResultSet;
 
 @Component
 public class AppStarter {
@@ -20,14 +23,29 @@ public class AppStarter {
             System.out.println("Veritabani kontrol ediliyor...");
             SchemaInitializer.init();
 
-            System.out.println("Excel fiyat tablolari yukleniyor...");
-            String excelPath = extractExcel();
-            new MasterExcelImporter().importAll(excelPath);
+            // Fiyat tablosu boşsa ilk kurulum — Excel'den yükle
+            if (fiyatTablosuBos()) {
+                System.out.println("İlk kurulum: Excel fiyat tablolari yukleniyor...");
+                String excelPath = extractExcel();
+                new MasterExcelImporter().importAll(excelPath);
+                System.out.println("İlk kurulum tamamlandi.");
+            } else {
+                System.out.println("Fiyat tablolari mevcut. Admin panelinden yonetilebilir.");
+            }
 
             System.out.println("Hazir! http://localhost:8080");
         } catch (Exception e) {
             System.err.println("Baslama hatasi: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private boolean fiyatTablosuBos() {
+        try (Connection c = ConnectionManager.getConnection();
+             ResultSet rs = c.createStatement().executeQuery("SELECT COUNT(*) FROM price_table")) {
+            return rs.next() && rs.getInt(1) == 0;
+        } catch (Exception e) {
+            return true;
         }
     }
 

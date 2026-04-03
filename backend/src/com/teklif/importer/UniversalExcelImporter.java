@@ -64,8 +64,9 @@ public class UniversalExcelImporter {
         // STRING_SIZE (Ø315 gibi string veya tek kolon ölçü)
         if(sheetName.startsWith("KANM")
                 || sheetName.startsWith("KASWRDIF")
-                || sheetName.startsWith("DASWRDIF")     // ✅ Swirl fix
-                || sheetName.startsWith("PNJ_ALTIKUTU") // ✅ Altıgen kutu fix
+                || sheetName.startsWith("DASWRDIF")
+                || sheetName.startsWith("PNJ_ALTIKUTU")
+                || sheetName.equals("BOX_STR")          // ✅ Kare kutu string boyut
         )
             return "STRING_SIZE";
 

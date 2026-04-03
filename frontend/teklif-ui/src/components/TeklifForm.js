@@ -5,10 +5,11 @@ import { createTeklif, updateTeklif, getYeniNo, getMusteriler, getKurlar, getUru
 const EMPTY = {
   teklifNo:'', isAdi:'', musteriId:'',
   teklifTarihi: new Date().toISOString().slice(0,10),
-  gecerlilikTarihi:'', teklifiVeren:'',
+  gecerlilikTarihi: (() => { const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); })(),
+  teklifiVeren:'',
   paraBirimi:'TL', kdvOrani:20, notlar:'', kalemler:[]
 };
-const EMPTY_KALEM = { urunKodu:'', urunAdi:'', adet:1, birim:'Adet', birimFiyat:0, iskonto:0 };
+const EMPTY_KALEM = { urunKodu:'', urunAdi:'', adet:1, birim:'Adet', birimFiyat:0, iskonto:0, toplam:0 };
 
 const OLCU_LABEL = {
   GENISLIK:'Genişlik W (mm)', YUKSEKLIK:'Yükseklik H (mm)', UZUNLUK:'Uzunluk L (mm)',
@@ -26,13 +27,13 @@ const KATEGORI_LABEL = {
   DAIRESEL_ANEMOSTAD:'Dairesel Anemostad', KARE_SWIRL:'Kare Swirl',
   DAIRESEL_SWIRL:'Dairesel Swirl', PANJUR:'Panjur', KAPAK:'Kapak', KUTU:'Kutu',
 };
-const STRING_OLCULAR = new Set(['KASA_WH','BOGAZ_WH','KASA_CAP','BOGAZ_CAP']);
+const STRING_OLCULAR = new Set(['KASA_WH','BOGAZ_WH','KASA_CAP','BOGAZ_CAP','NETIC_CAP']);
 const INT_OLCULAR    = new Set(['SLOT_SAYISI']);
 
 /* ── Yardımcı ─────────────────────────────────────────── */
 const pbSembol = pb => pb==='EUR'?'€':pb==='USD'?'$':'₺';
 
-export default function TeklifForm({ teklif, onSave, onClose }) {
+export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
   const [form, setForm]         = useState(EMPTY);
   const [musteriler, setMust]   = useState([]);
   const [kurlar, setKurlar]     = useState({ EUR:42, USD:38 });
@@ -62,7 +63,14 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
     if (teklif) {
       setForm({...EMPTY,...teklif, kalemler:teklif.kalemler||[]});
     } else {
-      getYeniNo().then(r => setForm(f=>({...f, teklifNo:r.data.teklifNo}))).catch(()=>{});
+      const adSoyad = (kullanici?.adSoyad && kullanici.adSoyad.trim())
+        ? kullanici.adSoyad.trim()
+        : (kullanici?.kullaniciAdi || '');
+      getYeniNo().then(r => setForm(f=>({
+        ...f,
+        teklifNo: r.data.teklifNo,
+        teklifiVeren: f.teklifiVeren || adSoyad  // düzenleme modunda mevcut değeri koru
+      }))).catch(()=>{});
     }
   }, [teklif]);
 
@@ -140,9 +148,7 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
   /* Ürün kaleme ekle */
   const urunEkle = async () => {
     // RAL Boyalı ise kod zorunlu
-    if (ozellikler['RAL']==='Boyalı' && !ralKod.trim()) {
-      setFiyatHata('Boyalı seçildi — RAL kodu giriniz.'); return;
-    }
+    // RAL kodu opsiyonel — zorunlu değil
     const errs = validateUrun();
     if (errs.length>0) { setFiyatHata(errs[0]); return; }
     setHesaplaniyor(true); setFiyatHata('');
@@ -183,31 +189,50 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
         .map(([,v])=>Array.isArray(v)?v.join(', '):v)
         .join(' / ');
 
-      let ad = secUrun.ad + olcuEki;
+      // Menfez tipi ürün adının yanına ekle
+      const menfezTipi = ozelliklerGonder['MENFEZ_TIPI'];
+      const menfezEki = menfezTipi && !Array.isArray(menfezTipi) ? ` ${menfezTipi}` : '';
+
+      let ad = secUrun.ad + menfezEki + olcuEki;
       if (ozellikSuffix) ad += ' — ' + ozellikSuffix;
 
       /* Slot prefix */
       if (secUrun.kod.startsWith('SLT') && olcular['SLOT_SAYISI'])
         ad = olcular['SLOT_SAYISI'] + ' Yarıklı ' + ad;
 
-      // Ölçü alanlarını ayrı çıkar (DB'ye ayrı kaydedilecek)
+      /* ── Kutu özel isimlendirme ── */
+      if (secUrun.kod === 'BOX_WH') {
+        // Menfez Kutusu: W+1 x H+1
+        const w = parseInt(olcular['GENISLIK']||0);
+        const h = parseInt(olcular['YUKSEKLIK']||0);
+        if (w && h) ad = `Menfez Kutusu ${w+1}x${h+1}`;
+        else ad = 'Menfez Kutusu';
+      } else if (secUrun.kod === 'BOX_LS') {
+        // Slot Kutusu: "1 Yarıklı ve 500 mm için Slot Kutusu"
+        const slot = olcular['SLOT_SAYISI'] || '';
+        const uzun = olcular['UZUNLUK'] || '';
+        if (slot && uzun) ad = `${slot} Yarıklı ve ${uzun} mm'li Slot Kutusu`;
+        else ad = 'Slot Kutusu';
+      } else if (secUrun.kod === 'BOX_STR') {
+        // Anemostat Kutusu: boğaz, dış (boğaz+150), kutu (boğaz+90)
+        const bogaz = strOlcular['KASA_WH'] || '';
+        if (bogaz) {
+          const [bw, bh] = bogaz.split('x').map(Number);
+          if (bw && bh) {
+            const dis  = `${bw+150}x${bh+150}`;
+            const kutu = `${bw+90}x${bh+90}`;
+            ad = `${bogaz} Boğaz, ${dis} Dış ve ${kutu} Ölçülü Anemostat Kutusu`;
+          } else ad = 'Anemostat Kutusu';
+        } else ad = 'Anemostat Kutusu';
+      }
+
       const yeniKalem = {
-        urunKodu:    secUrun.kod,
-        urunAdi:     ad,
-        adet:        miktar,
-        birim:       'Adet',
-        birimFiyat:  Math.round(tlFiyat*100)/100, // HER ZAMAN TL
-        iskonto:     0,
-        // Ölçüler
-        genislik:    olcular['GENISLIK']  || '',
-        yukseklik:   olcular['YUKSEKLIK'] || '',
-        uzunluk:     olcular['UZUNLUK']   || '',
-        cap:         olcular['CAP'] || olcular['BOGAZ_CAP'] || olcular['NETIC_CAP'] || '',
-        // Özellikler
-        cerceveTipi: ozelliklerGonder['CERCEVE_TIPI'] || ozelliklerGonder['MENFEZ_TIPI'] || '',
-        damperTipi:  ozelliklerGonder['DAMPER_TIPI']  || '',
-        ralKodu:     ozelliklerGonder['RAL']           || '',
-        montaj:      ozelliklerGonder['MONTAJ']        || '',
+        urunKodu: secUrun.kod,
+        urunAdi: ad,
+        adet: miktar,
+        birim: 'Adet',
+        birimFiyat: Math.round(fiyat*100)/100,
+        iskonto: 0,
       };
       setForm(f=>({...f, kalemler:[...f.kalemler, yeniKalem]}));
       /* Sadece ölçüler ve miktar sıfırla, kategori/ürün/özellikler kalsın */
@@ -229,7 +254,11 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
   /* Kalem işlemleri */
   const set       = (k,v) => setForm(f=>({...f,[k]:v}));
   const kalemSet  = (i,k,v) => {
-    const arr=[...form.kalemler]; arr[i]={...arr[i],[k]:v};
+    const arr=[...form.kalemler];
+    arr[i]={...arr[i],[k]:v};
+    const km=arr[i];
+    const net=(km.birimFiyat||0)*(km.adet||1);
+    arr[i].toplam=net-net*(km.iskonto||0)/100;
     setForm(f=>({...f,kalemler:arr}));
   };
   const removeKalem = (i) => setForm(f=>({...f,kalemler:f.kalemler.filter((_,idx)=>idx!==i)}));
@@ -248,11 +277,23 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
     if (!form.isAdi.trim()) { setError('İş adı zorunludur.'); return; }
     setLoading(true); setError('');
     try {
-      if (teklif?.id) await updateTeklif(teklif.id,form);
-      else await createTeklif(form);
+      // Toplamları hesaplayıp forma ekle
+      const payload = {
+        ...form,
+        araToplam,
+        kdvTutari,
+        genelToplam,
+        kalemler: form.kalemler.map((k,i) => ({
+          ...k,
+          siraNo: i+1,
+          toplam: kalemToplam(k)
+        }))
+      };
+      if (teklif?.id) await updateTeklif(teklif.id, payload);
+      else await createTeklif(payload);
       onSave();
     } catch(e) {
-      setError(e.response?.data?.hata||'Bir hata oluştu.');
+      setError(e.response?.data?.hata || e.message || 'Bir hata oluştu.');
     } finally { setLoading(false); }
   };
 
@@ -390,7 +431,11 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
               <div>
                 <label>Teklif Tarihi *</label>
                 <input className="input" type="date" value={form.teklifTarihi}
-                  onChange={e=>set('teklifTarihi',e.target.value)} style={{fontSize:12,padding:'6px 8px'}}/>
+                  onChange={e=>{
+                    const d=new Date(e.target.value); d.setDate(d.getDate()+7);
+                    set('teklifTarihi',e.target.value);
+                    set('gecerlilikTarihi',d.toISOString().slice(0,10));
+                  }} style={{fontSize:12,padding:'6px 8px'}}/>
               </div>
               <div>
                 <label>Geçerlilik Tarihi</label>
@@ -469,6 +514,19 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
                         {tip!=='AKSESUAR_TIPI'&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
                       </label>
                       {renderOzellik(tip,sec)}
+                      {/* Boyalı seçilince RAL kodu alanı */}
+                      {tip==='RAL' && ozellikler['RAL']==='Boyalı' && (
+                        <div style={{marginTop:6}}>
+                          <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:3}}>
+                            RAL Kodu <span style={{color:'var(--muted)',fontSize:10}}>(opsiyonel)</span>
+                          </label>
+                          <input className="input"
+                            placeholder="Örn: RAL 9010"
+                            style={{fontSize:12,padding:'5px 8px'}}
+                            value={ralKod}
+                            onChange={e=>setRalKod(e.target.value)}/>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -486,6 +544,19 @@ export default function TeklifForm({ teklif, onSave, onClose }) {
                         {tip==='AKSESUAR_TIPI'&&<span style={{color:'var(--muted)',marginLeft:3,fontSize:10}}>(opsiyonel)</span>}
                       </label>
                       {renderOzellik(tip,sec)}
+                      {/* Boyalı seçilince RAL kodu alanı */}
+                      {tip==='RAL' && ozellikler['RAL']==='Boyalı' && (
+                        <div style={{marginTop:6}}>
+                          <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:3}}>
+                            RAL Kodu <span style={{color:'var(--muted)',fontSize:10}}>(opsiyonel)</span>
+                          </label>
+                          <input className="input"
+                            placeholder="Örn: RAL 9010"
+                            style={{fontSize:12,padding:'5px 8px'}}
+                            value={ralKod}
+                            onChange={e=>setRalKod(e.target.value)}/>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

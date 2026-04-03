@@ -1,0 +1,23 @@
+# Java
+target/
+*.class
+
+# Database
+*.db
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Cache
+.cache/
+*.pack
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
