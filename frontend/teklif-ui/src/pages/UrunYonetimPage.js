@@ -377,10 +377,12 @@ function UrunOzellikPanel({ onYeniTipAc, onOzelliklerChange, onSecUrunChange }) 
   const [ozellikler, setOzellikler] = React.useState([]);
   const [yukleniyor, setYukleniyor] = React.useState(false);
   const [kaydMesaj, setKaydMesaj] = React.useState('');
+  const [ticariKod, setTicariKod] = React.useState('');
+  const [ticariKodMesaj, setTicariKodMesaj] = React.useState('');
   const [ratioSecenekler, setRatioSecenekler] = React.useState({});
 
   React.useEffect(() => {
-    fetch('http://localhost:8080/api/urunler')
+    fetch('/api/urunler')
       .then(r => r.json())
       .then(data => setUrunler(data))
       .catch(() => {});
@@ -401,22 +403,16 @@ function UrunOzellikPanel({ onYeniTipAc, onOzelliklerChange, onSecUrunChange }) 
   };
 
   const urunSec = async (kod) => {
-    setSecUrun(kod); setYukleniyor(true); setKaydMesaj('');
+    setSecUrun(kod); setYukleniyor(true); setKaydMesaj(''); setTicariKodMesaj('');
     if (onSecUrunChange) onSecUrunChange(kod);
     try {
-      const r = await getUrunOzellikler(kod);
-      const ozellikData = r.data;
-
-      // Override olmayan özellikler için config'deki varsayılanları otomatik kaydet
-      const kayitlacaklar = ozellikData.filter(o => !o.overrideVar && o.secenekler.length > 0);
-      for (const o of kayitlacaklar) {
-        await updateUrunOzellikler(kod, { ozellikTip: o.ozellikTip, secenekler: o.secenekler });
-      }
-
-      // Kaydedildikten sonra güncel listeyi çek
-      const r2 = kayitlacaklar.length > 0 ? await getUrunOzellikler(kod) : r;
-      const data2 = r2.data.map(o => ({...o, secenekler:[...o.secenekler], yeniSecenek:''}));
+      const [r, tkResp] = await Promise.all([
+        getUrunOzellikler(kod),
+        fetch(`/api/admin/ticari-kod/${kod}`, { headers:{ 'X-Token': localStorage.getItem('auth_token')||'' } }).then(r=>r.json()).catch(()=>({ticariKod:''}))
+      ]);
+      const data2 = r.data.map(o => ({...o, secenekler:[...o.secenekler], yeniSecenek:''}));
       setOzellikler(data2);
+      setTicariKod(tkResp.ticariKod || '');
       if (onOzelliklerChange) onOzelliklerChange(data2);
     } catch(e) { alert('Hata: ' + e.message); }
     finally { setYukleniyor(false); }
@@ -450,11 +446,24 @@ function UrunOzellikPanel({ onYeniTipAc, onOzelliklerChange, onSecUrunChange }) 
 
   const kaydet = async (tipIdx) => {
     const o = ozellikler[tipIdx];
+    if (!o) { alert('Özellik bulunamadı'); return; }
+    const token = localStorage.getItem('auth_token');
     try {
-      await updateUrunOzellikler(secUrun, { ozellikTip: o.ozellikTip, secenekler: o.secenekler });
-      setKaydMesaj(o.ozellikTip + ' kaydedildi ✓');
-      setTimeout(() => setKaydMesaj(''), 2000);
-    } catch(e) { alert('Hata: ' + e.message); }
+      const resp = await fetch(`/api/admin/urun-ozellikler/${secUrun}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Token': token || '' },
+        body: JSON.stringify({ ozellikTip: o.ozellikTip, secenekler: o.secenekler })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        setKaydMesaj(o.ozellikTip + ' kaydedildi ✓');
+        setTimeout(() => setKaydMesaj(''), 2000);
+      } else {
+        alert('Hata: ' + (data.hata || 'Bilinmeyen hata'));
+      }
+    } catch(e) {
+      alert('Hata: ' + e.message);
+    }
   };
 
   const sifirla = async (tipIdx) => {
@@ -529,6 +538,28 @@ function UrunOzellikPanel({ onYeniTipAc, onOzelliklerChange, onSecUrunChange }) 
                 {urunler.find(u=>u.kod===secUrun)?.ad || secUrun}
               </div>
               <div style={{fontSize:11,color:'var(--muted)',marginTop:1}}>{secUrun}</div>
+              {/* Ticari Kod */}
+              <div style={{marginTop:12,display:'flex',alignItems:'center',gap:8}}>
+                <div style={{fontSize:11,color:'var(--muted)',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',minWidth:80}}>Ticari Kod</div>
+                <input
+                  className="input"
+                  style={{width:160,padding:'5px 8px',fontSize:13}}
+                  placeholder="örn: GLEA SD"
+                  value={ticariKod}
+                  onChange={e=>setTicariKod(e.target.value)}
+                  onKeyDown={async e=>{
+                    if(e.key==='Enter'){
+                      await fetch(`/api/admin/ticari-kod/${secUrun}`,{method:'PUT',headers:{'Content-Type':'application/json','X-Token':localStorage.getItem('auth_token')||''},body:JSON.stringify({ticariKod})});
+                      setTicariKodMesaj('✓ Kaydedildi'); setTimeout(()=>setTicariKodMesaj(''),2000);
+                    }
+                  }}
+                />
+                <button className="btn btn-primary btn-sm" onClick={async()=>{
+                  await fetch(`/api/admin/ticari-kod/${secUrun}`,{method:'PUT',headers:{'Content-Type':'application/json','X-Token':localStorage.getItem('auth_token')||''},body:JSON.stringify({ticariKod})});
+                  setTicariKodMesaj('✓ Kaydedildi'); setTimeout(()=>setTicariKodMesaj(''),2000);
+                }}>Kaydet</button>
+                {ticariKodMesaj && <span style={{color:'var(--green)',fontSize:12}}>{ticariKodMesaj}</span>}
+              </div>
             </div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
               {kaydMesaj && <div style={{color:'var(--green)',fontSize:13,fontWeight:600}}>{kaydMesaj}</div>}
@@ -746,7 +777,7 @@ function UrunOranlariPanel() {
   )];
 
   React.useEffect(() => {
-    fetch('http://localhost:8080/api/urunler')
+    fetch('/api/urunler')
       .then(r=>r.json()).then(setUrunler).catch(()=>{});
     getOzellikOranlari().then(r => setTumOranlar(r.data)).catch(()=>{});
   }, []);

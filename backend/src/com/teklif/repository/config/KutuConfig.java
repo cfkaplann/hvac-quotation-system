@@ -31,7 +31,7 @@ public class KutuConfig {
 						Map.of(
 
 								OzellikTipi.AKSESUAR_TIPI, List.of("İç İzoleli", "Dış İzoleli")),
-						List.of(OlcuAlanTipi.UZUNLUK, OlcuAlanTipi.SLOT_SAYISI), false),
+						List.of(OlcuAlanTipi.UZUNLUK, OlcuAlanTipi.SLOT_SAYISI, OlcuAlanTipi.YUKSEKLIK), false),
 
 				new UrunKart("BOX_STR", UrunKategori.KUTU, "Kare Amemostad Planum Box",
 						List.of(OzellikTipi.AKSESUAR_TIPI), Map.of(

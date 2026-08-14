@@ -40,7 +40,6 @@ public class UrunlerRestController {
             UrunKart urun = UrunKataloguDeposu.bul(kod);
             if (urun == null) return ResponseEntity.notFound().build();
 
-            // Ölçüleri parse et
             Map<OlcuAlanTipi, Double> olcular = new HashMap<>();
             @SuppressWarnings("unchecked")
             Map<String, Object> olcularRaw = (Map<String, Object>) body.getOrDefault("olcular", Map.of());
@@ -51,35 +50,30 @@ public class UrunlerRestController {
                 } catch (Exception ignored) {}
             }
 
-            // String ölçüler (KASA_WH, BOGAZ_WH vb) için
             @SuppressWarnings("unchecked")
             Map<String, Object> strOlcularRaw = (Map<String, Object>) body.getOrDefault("stringOlcular", Map.of());
 
             PricingRequest.Builder builder = PricingRequest.builder(urun.getKod());
             PricingRequestMapper.apply(builder, olcular);
 
-            // KASA_WH / BOGAZ_WH string olarak gönderilirse
-            String kasaWh  = (String) strOlcularRaw.get("KASA_WH");
-            String bogazWh = (String) strOlcularRaw.get("BOGAZ_WH");
+            String kasaWh   = (String) strOlcularRaw.get("KASA_WH");
+            String bogazWh  = (String) strOlcularRaw.get("BOGAZ_WH");
             String kasaCap  = (String) strOlcularRaw.get("KASA_CAP");
             String bogazCap = (String) strOlcularRaw.get("BOGAZ_CAP");
             String neticeCap = (String) strOlcularRaw.get("NETIC_CAP");
 
-            if (kasaWh != null || bogazWh != null) {
+            if (kasaWh != null || bogazWh != null)
                 builder.disBogaz(kasaWh != null ? kasaWh : "", bogazWh != null ? bogazWh : "");
-            }
             if (kasaCap != null) builder.kasaCap(kasaCap);
             if (bogazCap != null) {
-                try { builder.diameter(Double.parseDouble(bogazCap.replace("Ø","").trim())); } catch (Exception ignored) {}
+                try { builder.diameter(Double.parseDouble(bogazCap.replace("\u00d8","").trim())); } catch (Exception ignored) {}
             }
-            // NETIC_CAP → diameter (sayısal çap)
             if (neticeCap != null) {
-                try { builder.diameter(Double.parseDouble(neticeCap.replace("Ø","").trim())); } catch (Exception ignored) {}
+                try { builder.diameter(Double.parseDouble(neticeCap.replace("\u00d8","").trim())); } catch (Exception ignored) {}
             }
 
             PricingRequest req = builder.build();
 
-            // Özellikleri parse et
             Map<OzellikTipi, List<String>> secimler = new HashMap<>();
             @SuppressWarnings("unchecked")
             Map<String, Object> ozelliklerRaw = (Map<String, Object>) body.getOrDefault("ozellikler", Map.of());
@@ -97,7 +91,16 @@ public class UrunlerRestController {
                 } catch (Exception ignored) {}
             }
 
-            PricingResult result = pricingService.fiyatHesapla(req, secimler, urun.getKategori().name());
+            Map<String, Double> motorFiyatlari = new HashMap<>();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> motorRaw = (Map<String, Object>) body.getOrDefault("motorFiyatlari", Map.of());
+            for (Map.Entry<String, Object> e : motorRaw.entrySet()) {
+                try { motorFiyatlari.put(e.getKey(), Double.parseDouble(e.getValue().toString())); } catch (Exception ignored) {}
+            }
+
+            PricingResult result = motorFiyatlari.isEmpty()
+                ? pricingService.fiyatHesapla(req, secimler)
+                : pricingService.fiyatHesapla(req, secimler, motorFiyatlari);
 
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("hamFiyat",   result.getHamFiyat());
@@ -109,11 +112,10 @@ public class UrunlerRestController {
 
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
-                .body(Map.of("hata", e.getMessage() != null ? e.getMessage() : "Fiyat hesaplanamadı"));
+                .body(Map.of("hata", e.getMessage() != null ? e.getMessage() : "Fiyat hesaplanamad\u0131"));
         }
     }
 
-    // ── Override yükleyici ───────────────────────────────
     private static Map<String, List<String>> getOverrides(String urunKod) {
         Map<String, List<String>> overrides = new java.util.LinkedHashMap<>();
         try (java.sql.Connection conn = com.teklif.db.ConnectionManager.getConnection();
@@ -122,11 +124,7 @@ public class UrunlerRestController {
             ps.setString(1, urunKod);
             try (java.sql.ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String tip = rs.getString("ozellik_tip");
-                    String json = rs.getString("secenekler");
-                    // Basit JSON array parse: ["a","b","c"]
-                    List<String> sec = parseJsonArray(json);
-                    overrides.put(tip, sec);
+                    overrides.put(rs.getString("ozellik_tip"), parseJsonArray(rs.getString("secenekler")));
                 }
             }
         } catch (Exception e) { e.printStackTrace(); }
@@ -135,29 +133,26 @@ public class UrunlerRestController {
 
     private static List<String> parseJsonArray(String json) {
         List<String> list = new java.util.ArrayList<>();
-        if (json == null || json.trim().equals("[]")) return list;
-        String inner = json.trim();
-        if (inner.startsWith("[")) inner = inner.substring(1);
-        if (inner.endsWith("]"))   inner = inner.substring(0, inner.length() - 1);
-        for (String part : inner.split(",")) {
-            String s = part.trim();
-            if (s.startsWith("\"")) s = s.substring(1);
-            if (s.endsWith("\""))   s = s.substring(0, s.length() - 1);
-            if (!s.isEmpty()) list.add(s);
+        if (json == null || json.isBlank() || json.trim().equals("[]")) return list;
+        String trimmed = json.trim();
+        if (trimmed.startsWith("[")) trimmed = trimmed.substring(1);
+        if (trimmed.endsWith("]")) trimmed = trimmed.substring(0, trimmed.length()-1);
+        trimmed = trimmed.trim(); if (trimmed.isEmpty()) return list;
+        int i = 0;
+        while (i < trimmed.length()) {
+            if (trimmed.charAt(i) == '"') {
+                int start = i + 1, end = start;
+                while (end < trimmed.length()) {
+                    if (trimmed.charAt(end) == '\\') { end += 2; continue; }
+                    if (trimmed.charAt(end) == '"') break;
+                    end++;
+                }
+                list.add(trimmed.substring(start, end).replace("\\\"", "\""));
+                i = end + 1;
+                while (i < trimmed.length() && (trimmed.charAt(i) == ',' || trimmed.charAt(i) == ' ')) i++;
+            } else { i++; }
         }
         return list;
-    }
-
-    private static String toJsonArray(List<String> list) {
-        if (list == null || list.isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < list.size(); i++) {
-            if (i > 0) sb.append(",");
-            String val = list.get(i).replace("\\", "\\\\").replace("\"", "\\\"");
-            sb.append("\"").append(val).append("\"");
-        }
-        sb.append("]");
-        return sb.toString();
     }
 
     private Map<String, Object> urunToMap(UrunKart u) {
@@ -166,33 +161,25 @@ public class UrunlerRestController {
         m.put("ad",       u.getAd());
         m.put("kategori", u.getKategori().name());
 
-        // Zorunlu ölçüler
         List<String> zorunluOlcular = u.getZorunluOlculer() != null
             ? u.getZorunluOlculer().stream().map(Enum::name).collect(Collectors.toList())
             : List.of();
         m.put("zorunluOlcular", zorunluOlcular);
 
-        // İzinli ölçü değerleri (combo için)
         Map<String, List<String>> izinliOlcuDegerleri = new LinkedHashMap<>();
         if (u.getIzinliOlcuDegerleri() != null) {
-            for (Map.Entry<OlcuAlanTipi, List<String>> e : u.getIzinliOlcuDegerleri().entrySet()) {
+            for (Map.Entry<OlcuAlanTipi, List<String>> e : u.getIzinliOlcuDegerleri().entrySet())
                 izinliOlcuDegerleri.put(e.getKey().name(), e.getValue());
-            }
         }
         m.put("izinliOlcuDegerleri", izinliOlcuDegerleri);
 
-        // Boğaz filtre map (kasa -> izinli boğazlar)
         Map<String, List<String>> bogazFiltreMap = new LinkedHashMap<>();
-        if (u.getBogazFiltreMap() != null) {
-            bogazFiltreMap.putAll(u.getBogazFiltreMap());
-        }
+        if (u.getBogazFiltreMap() != null) bogazFiltreMap.putAll(u.getBogazFiltreMap());
         m.put("bogazFiltreMap", bogazFiltreMap);
 
-        // Özellikler (override varsa önce o kullanılır + ekstra tipler)
         Map<String, List<String>> ozellikler = new LinkedHashMap<>();
         Map<String, List<String>> overrides = getOverrides(u.getKod());
 
-        // Önce config'deki tipler
         if (u.getOzellikler() != null) {
             for (OzellikTipi tip : u.getOzellikler()) {
                 List<String> secenekler = overrides.containsKey(tip.name())
@@ -203,11 +190,8 @@ public class UrunlerRestController {
                 ozellikler.put(tip.name(), secenekler);
             }
         }
-        // Override'da config'de olmayan ekstra tipler (admin panelinden eklenenler)
         for (Map.Entry<String, List<String>> e : overrides.entrySet()) {
-            if (!ozellikler.containsKey(e.getKey())) {
-                ozellikler.put(e.getKey(), e.getValue());
-            }
+            if (!ozellikler.containsKey(e.getKey())) ozellikler.put(e.getKey(), e.getValue());
         }
         m.put("ozellikler", ozellikler);
         m.put("multiSelectOzellikler",

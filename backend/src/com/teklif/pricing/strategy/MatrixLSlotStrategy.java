@@ -16,8 +16,21 @@ public class MatrixLSlotStrategy implements PricingStrategy {
         if (req.getL() == null || req.getSlot() == null)
             throw new IllegalArgumentException("L ve Slot gerekli: " + req.getSheetName());
 
-        double l = req.getL();
+        double l    = req.getL();
         double slot = req.getSlot();
+
+        // Yükseklik çarpanı — sadece BOX_LS için
+        double yukseklikCarpan = 1.0;
+        if ("BOX_LS".equals(req.getSheetName()) && req.getH() != null) {
+            double h = req.getH();
+            if (h >= 500) {
+                yukseklikCarpan = 1.5;
+            } else if (h >= 400) {
+                yukseklikCarpan = 1.25;
+            } else {
+                yukseklikCarpan = 1.0;
+            }
+        }
 
         try (Connection conn = ConnectionManager.getConnection()) {
 
@@ -27,49 +40,29 @@ public class MatrixLSlotStrategy implements PricingStrategy {
 
             double toplamFiyat = 0;
 
-            // slot ceiling sadece 1 kere
-            double slotCeil =
-                    repo.ceilingAxis(conn, tableId, "COL", slot);
+            double slotCeil = repo.ceilingAxis(conn, tableId, "COL", slot);
 
-            // =====================================================
             // FULL PARÇALAR
-            // =====================================================
-
             int fullCount = (int)(l / maxL);
-
-            if(fullCount > 0){
-
-                double lMaxCeil =
-                        repo.ceilingAxis(conn, tableId, "ROW", maxL);
-
-                double fiyatMax =
-                        repo.cellPrice(conn, tableId, lMaxCeil, slotCeil);
-
+            if (fullCount > 0) {
+                double lMaxCeil = repo.ceilingAxis(conn, tableId, "ROW", maxL);
+                double fiyatMax = repo.cellPrice(conn, tableId, lMaxCeil, slotCeil);
                 toplamFiyat += fullCount * fiyatMax;
             }
 
-            // =====================================================
             // KALAN PARÇA
-            // =====================================================
-
             double remain = l % maxL;
-
-            if(remain > 0){
-
-                double lRemainCeil =
-                        repo.ceilingAxis(conn, tableId, "ROW", remain);
-
-                double fiyatRemain =
-                        repo.cellPrice(conn, tableId, lRemainCeil, slotCeil);
-
+            if (remain > 0) {
+                double lRemainCeil = repo.ceilingAxis(conn, tableId, "ROW", remain);
+                double fiyatRemain = repo.cellPrice(conn, tableId, lRemainCeil, slotCeil);
                 toplamFiyat += fiyatRemain;
             }
 
-            return toplamFiyat;
+            // Yükseklik çarpanını uygula
+            return toplamFiyat * yukseklikCarpan;
 
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
-
 }

@@ -99,17 +99,18 @@ public class TeklifRepository {
     public Teklif kaydet(Teklif t) throws Exception {
         t.setTeklifNo(yeniTeklifNo()); // Her yeni teklif için sequence'i artır
         t.hesaplaToplam();
-        String sql = "INSERT INTO teklif (teklif_no,revize_no,is_adi,musteri_id,teklif_tarihi,gecerlilik_tarihi,teklifi_veren,para_birimi,kdv_orani,ara_toplam,kdv_tutari,genel_toplam,durum,notlar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO teklif (teklif_no,revize_no,is_adi,musteri_id,musteri_adi,teklif_tarihi,gecerlilik_tarihi,teklifi_veren,para_birimi,kdv_orani,ara_toplam,kdv_tutari,genel_toplam,durum,notlar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (Connection c = ConnectionManager.getConnection()) {
             c.setAutoCommit(false);
             try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 ps.setString(1, t.getTeklifNo());   ps.setInt(2, t.getRevizeNo());
                 ps.setString(3, t.getIsAdi());      ps.setObject(4, t.getMusteriId());
-                ps.setString(5, t.getTeklifTarihi()); ps.setString(6, t.getGecerlilikTarihi());
-                ps.setString(7, t.getTeklifiVeren()); ps.setString(8, t.getParaBirimi());
-                ps.setDouble(9, t.getKdvOrani());   ps.setDouble(10, t.getAraToplam());
-                ps.setDouble(11, t.getKdvTutari()); ps.setDouble(12, t.getGenelToplam());
-                ps.setString(13, t.getDurum().name()); ps.setString(14, t.getNotlar());
+                ps.setString(5, t.getMusteriAdi());  ps.setString(6, t.getTeklifTarihi());
+                ps.setString(7, t.getGecerlilikTarihi()); ps.setString(8, t.getTeklifiVeren());
+                ps.setString(9, t.getParaBirimi());  ps.setDouble(10, t.getKdvOrani());
+                ps.setDouble(11, t.getAraToplam());  ps.setDouble(12, t.getKdvTutari());
+                ps.setDouble(13, t.getGenelToplam()); ps.setString(14, t.getDurum().name());
+                ps.setString(15, t.getNotlar());
                 ps.executeUpdate();
                 try (ResultSet k = ps.getGeneratedKeys()) {
                     if (k.next()) t.setId(k.getInt(1));
@@ -129,17 +130,17 @@ public class TeklifRepository {
 
     public boolean guncelle(Teklif t) throws Exception {
         t.hesaplaToplam();
-        String sql = "UPDATE teklif SET is_adi=?,musteri_id=?,teklif_tarihi=?,gecerlilik_tarihi=?,teklifi_veren=?,para_birimi=?,kdv_orani=?,ara_toplam=?,kdv_tutari=?,genel_toplam=?,durum=?,notlar=?,guncelleme_tarihi=datetime('now','localtime') WHERE id=?";
+        String sql = "UPDATE teklif SET is_adi=?,musteri_id=?,musteri_adi=?,teklif_tarihi=?,gecerlilik_tarihi=?,teklifi_veren=?,para_birimi=?,kdv_orani=?,ara_toplam=?,kdv_tutari=?,genel_toplam=?,durum=?,notlar=?,guncelleme_tarihi=datetime('now','localtime') WHERE id=?";
         try (Connection c = ConnectionManager.getConnection()) {
             c.setAutoCommit(false);
             try (PreparedStatement ps = c.prepareStatement(sql)) {
                 ps.setString(1, t.getIsAdi());      ps.setObject(2, t.getMusteriId());
-                ps.setString(3, t.getTeklifTarihi()); ps.setString(4, t.getGecerlilikTarihi());
-                ps.setString(5, t.getTeklifiVeren()); ps.setString(6, t.getParaBirimi());
-                ps.setDouble(7, t.getKdvOrani());   ps.setDouble(8, t.getAraToplam());
-                ps.setDouble(9, t.getKdvTutari());  ps.setDouble(10, t.getGenelToplam());
-                ps.setString(11, t.getDurum().name()); ps.setString(12, t.getNotlar());
-                ps.setInt(13, t.getId());
+                ps.setString(3, t.getMusteriAdi());  ps.setString(4, t.getTeklifTarihi());
+                ps.setString(5, t.getGecerlilikTarihi()); ps.setString(6, t.getTeklifiVeren());
+                ps.setString(7, t.getParaBirimi());  ps.setDouble(8, t.getKdvOrani());
+                ps.setDouble(9, t.getAraToplam());   ps.setDouble(10, t.getKdvTutari());
+                ps.setDouble(11, t.getGenelToplam()); ps.setString(12, t.getDurum().name());
+                ps.setString(13, t.getNotlar());     ps.setInt(14, t.getId());
                 ps.executeUpdate();
             }
             try (PreparedStatement d = c.prepareStatement("DELETE FROM teklif_kalem WHERE teklif_id=?")) {
@@ -227,6 +228,7 @@ public class TeklifRepository {
         t.setId(rs.getInt("id")); t.setTeklifNo(rs.getString("teklif_no"));
         t.setRevizeNo(rs.getInt("revize_no")); t.setIsAdi(rs.getString("is_adi"));
         t.setMusteriId((Integer) rs.getObject("musteri_id"));
+        try { t.setMusteriAdi(rs.getString("musteri_adi")); } catch (Exception ignored) {}
         t.setTeklifTarihi(rs.getString("teklif_tarihi")); t.setGecerlilikTarihi(rs.getString("gecerlilik_tarihi"));
         t.setTeklifiVeren(rs.getString("teklifi_veren")); t.setParaBirimi(rs.getString("para_birimi"));
         t.setKdvOrani(rs.getDouble("kdv_orani")); t.setAraToplam(rs.getDouble("ara_toplam"));

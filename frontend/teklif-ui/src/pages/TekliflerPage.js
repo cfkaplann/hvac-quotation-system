@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getTeklifler, getTeklif, deleteTeklif, updateDurum, revizeTeklif } from '../services/api';
+import { getTeklifler, getTeklif, getKurlar, deleteTeklif, updateDurum, revizeTeklif, getNotlar, addNot, deleteNot } from '../services/api';
 import TeklifForm from '../components/TeklifForm';
 
 const DURUMLAR = ['', 'BEKLIYOR', 'ONAYLANDI', 'REDDEDILDI', 'REVIZE', 'IPTAL'];
@@ -55,7 +55,7 @@ function DurumMenu({ teklif, onRefresh }) {
 function ExcelBtn({ teklifId }) {
   return (
     <a
-      href={`http://localhost:8080/api/teklifler/${teklifId}/excel`}
+      href={`/api/teklifler/${teklifId}/excel`}
       target="_blank" rel="noreferrer"
       className="btn btn-secondary btn-sm"
       style={{ textDecoration: 'none' }}
@@ -73,7 +73,9 @@ export default function TekliflerPage({ onStatsChange, kullanici }) {
   const [aramaText, setAramaText]  = useState('');
   const [formOpen, setFormOpen]    = useState(false);
   const [editTeklif, setEditTeklif] = useState(null);
+  const [kurlar, setKurlar] = useState({ EUR: 42, USD: 38 });
   const [confirm, setConfirm]      = useState(null);
+  const [notModal, setNotModal]    = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,11 +104,13 @@ export default function TekliflerPage({ onStatsChange, kullanici }) {
     await deleteTeklif(id);
     setConfirm(null);
     load();
+    getKurlar().then(r => setKurlar(r.data)).catch(() => {});
   };
 
   const handleRevize = async (id) => {
     await revizeTeklif(id);
     load();
+    getKurlar().then(r => setKurlar(r.data)).catch(() => {});
   };
 
   return (
@@ -176,18 +180,26 @@ export default function TekliflerPage({ onStatsChange, kullanici }) {
                   <td style={{ fontWeight: 500, maxWidth: 200 }}>
                     <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.isAdi}</div>
                   </td>
-                  <td style={{ color: 'var(--muted)', fontSize: 13 }}>{t.musteri?.firmaAdi || '—'}</td>
+                  <td style={{ color: 'var(--muted)', fontSize: 13 }}>{t.musteri?.firmaAdi || t.musteriAdi || '—'}</td>
                   <td style={{ color: 'var(--muted)', fontSize: 13 }}>{t.teklifiVeren || '—'}</td>
                   <td style={{ color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{t.teklifTarihi}</td>
                   <td style={{ fontWeight: 600, color: 'var(--green)', whiteSpace: 'nowrap' }}>
-                    {t.genelToplam?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)' }}>{t.paraBirimi}</span>
+                    {(() => {
+                      const pb = t.paraBirimi;
+                      const kur = kurlar.EUR || 42;
+                      const kurUSD = kurlar.USD || 38;
+                      const tl = t.genelToplam || 0;
+                      const val = pb === 'EUR' ? tl / kur : pb === 'USD' ? tl / kurUSD : tl;
+                      return val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })()} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)' }}>{t.paraBirimi}</span>
                   </td>
                   <td><StatusBadge durum={t.durum} /></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                       <DurumMenu teklif={t} onRefresh={load} />
-                      <a className="btn btn-secondary btn-sm" href={`http://localhost:8080/api/teklifler/${t.id}/pdf`} target="_blank" rel="noreferrer" title="PDF indir">PDF</a>
+                      <a className="btn btn-secondary btn-sm" href={`/api/teklifler/${t.id}/pdf`} target="_blank" rel="noreferrer" title="PDF indir">PDF</a>
                       <ExcelBtn teklifId={t.id} />
+                      <button className="btn btn-secondary btn-sm" onClick={() => setNotModal(t.id)} title="Notlar">📝</button>
                       <button className="btn btn-secondary btn-sm" onClick={async () => { const r = await getTeklif(t.id); setEditTeklif(r.data); setFormOpen(true); }}>Düzenle</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => handleRevize(t.id)} title="Revize oluştur">↩</button>
                       <button className="btn btn-danger btn-sm" onClick={() => setConfirm(t.id)}>Sil</button>
@@ -210,6 +222,15 @@ export default function TekliflerPage({ onStatsChange, kullanici }) {
         />
       )}
 
+
+      {/* Not Modali */}
+      {notModal && (
+        <NotModal
+          teklifId={notModal}
+          onKapat={() => setNotModal(null)}
+        />
+      )}
+
       {/* Silme onayı */}
       {confirm && (
         <div className="modal-overlay" onClick={() => setConfirm(null)}>
@@ -223,6 +244,81 @@ export default function TekliflerPage({ onStatsChange, kullanici }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Not Modali ─────────────────────────────────────────── */
+function NotModal({ teklifId, onKapat }) {
+  const [notlar, setNotlar] = React.useState([]);
+  const [yeniNot, setYeniNot] = React.useState('');
+  const [yukleniyor, setYukleniyor] = React.useState(true);
+
+  const yukle = React.useCallback(() => {
+    setYukleniyor(true);
+    getNotlar(teklifId).then(r => setNotlar(r.data || [])).catch(() => {}).finally(() => setYukleniyor(false));
+  }, [teklifId]);
+
+  React.useEffect(() => { yukle(); }, [yukle]);
+
+  const kaydet = async () => {
+    if (!yeniNot.trim()) return;
+    try {
+      await addNot(teklifId, { icerik: yeniNot.trim() });
+      setYeniNot('');
+      yukle();
+    } catch(e) { alert('Hata: ' + e.message); }
+  };
+
+  const sil = async (notId) => {
+    if (!window.confirm('Bu notu silmek istediğinize emin misiniz?')) return;
+    await deleteNot(teklifId, notId);
+    yukle();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onKapat()}>
+      <div className="modal" style={{maxWidth:500}} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Notlar</h2>
+          <button className="close-btn" onClick={onKapat}>×</button>
+        </div>
+        <div className="modal-body">
+          {/* Yeni not ekle */}
+          <div style={{marginBottom:16}}>
+            <textarea className="input textarea" rows={3}
+              placeholder="Not ekleyin..."
+              value={yeniNot}
+              onChange={e => setYeniNot(e.target.value)}
+              onKeyDown={e => { if (e.ctrlKey && e.key === 'Enter') kaydet(); }}
+              style={{marginBottom:8}}/>
+            <button className="btn btn-primary btn-sm" onClick={kaydet}>+ Not Ekle</button>
+            <span style={{fontSize:11,color:'var(--muted)',marginLeft:8}}>veya Ctrl+Enter</span>
+          </div>
+
+          {/* Not listesi */}
+          {yukleniyor && <div style={{color:'var(--muted)',fontSize:13}}>Yükleniyor...</div>}
+          {!yukleniyor && notlar.length === 0 && (
+            <div style={{color:'var(--muted)',fontSize:13}}>Henüz not yok.</div>
+          )}
+          {notlar.map(n => (
+            <div key={n.id} style={{
+              background:'var(--surface2)', border:'1px solid var(--border)',
+              borderRadius:8, padding:'10px 14px', marginBottom:8,
+              display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8
+            }}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13, color:'var(--text)', whiteSpace:'pre-wrap'}}>{n.icerik}</div>
+                <div style={{fontSize:11, color:'var(--muted)', marginTop:4}}>
+                  {n.tarih?.slice(0,16).replace('T',' ')} {n.yazan ? `— ${n.yazan}` : ''}
+                </div>
+              </div>
+              <button onClick={() => sil(n.id)}
+                style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontSize:16,padding:'2px 4px',flexShrink:0}}>×</button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

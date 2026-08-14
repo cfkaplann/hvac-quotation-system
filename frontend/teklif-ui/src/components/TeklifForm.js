@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { createTeklif, updateTeklif, getYeniNo, getMusteriler, getKurlar, getUrunler, fiyatHesapla } from '../services/api';
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import { createTeklif, updateTeklif, getYeniNo, getMusteriler, getKurlar, getUrunler, fiyatHesapla, getOzellikOranlari } from '../services/api';
 
 /* ── Sabitler ─────────────────────────────────────────── */
 const EMPTY = {
-  teklifNo:'', isAdi:'', musteriId:'',
+  teklifNo:'', isAdi:'', musteriId:'', musteriAdi:'',
   teklifTarihi: new Date().toISOString().slice(0,10),
   gecerlilikTarihi: (() => { const d=new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); })(),
   teklifiVeren:'',
-  paraBirimi:'TL', kdvOrani:20, notlar:'', kalemler:[]
+  paraBirimi:'TL', kdvOrani:20, iskonto:0, notlar:'', kalemler:[]
 };
 const EMPTY_KALEM = { urunKodu:'', urunAdi:'', adet:1, birim:'Adet', birimFiyat:0, iskonto:0, toplam:0 };
 
@@ -22,7 +22,7 @@ const OZELLIK_LABEL = {
   RAL:'RAL / Renk', MONTAJ:'Montaj', AKSESUAR_TIPI:'Aksesuar',
 };
 const KATEGORI_LABEL = {
-  MENFEZ:'Menfez', SLOT:'Slot / Lineer', DIKDORTGEN_DAMPER:'Dikdörtgen Damper',
+  MENFEZ:'Menfez', SLOT:'Slot', DIKDORTGEN_DAMPER:'Dikdörtgen Damper',
   DAIRESEL_DAMPER:'Dairesel Damper', KARE_ANEMOSTAD:'Kare Anemostad',
   DAIRESEL_ANEMOSTAD:'Dairesel Anemostad', KARE_SWIRL:'Kare Swirl',
   DAIRESEL_SWIRL:'Dairesel Swirl', PANJUR:'Panjur', KAPAK:'Kapak', KUTU:'Kutu',
@@ -49,12 +49,31 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
   const [strOlcular, setStrOlcular]   = useState({});      // string combo
   const [ozellikler, setOzellikler]   = useState({});
   const [miktar, setMiktar]           = useState(1);
+  const [degisti, setDegisti]         = useState(false);
   const [fiyatHata, setFiyatHata]     = useState('');
   const [hesaplaniyor, setHesaplaniyor] = useState(false);
+  const [motorFiyat, setMotorFiyat] = useState('');
+  const [kalemOzellikAc, setKalemOzellikAc] = useState(null);
+  const [kalemDuzenle, setKalemDuzenle] = useState(null); // index
+  const [tumOzellikSecenekler, setTumOzellikSecenekler] = useState([]);
+  const [ozellikGruplari2, setOzellikGruplari2] = useState({}); // hangi kalem indexi açık
   const [ralKod, setRalKod]           = useState(''); // Boyalı seçilince RAL kodu
 
   useEffect(() => {
     getMusteriler().then(r => setMust(r.data)).catch(()=>{});
+    getOzellikOranlari().then(r => {
+      const secenekler = [...new Set(r.data.map(o => o.optionName))].filter(Boolean);
+      setTumOzellikSecenekler(secenekler);
+      // Tiplere göre grupla
+      const gruplar = {};
+      r.data.forEach(o => {
+        if (!o.featureType || !o.optionName) return;
+        if (!gruplar[o.featureType]) gruplar[o.featureType] = [];
+        if (!gruplar[o.featureType].includes(o.optionName))
+          gruplar[o.featureType].push(o.optionName);
+      });
+      setOzellikGruplari2(gruplar);
+    }).catch(()=>{});
     getKurlar().then(r => setKurlar(r.data)).catch(()=>{});
     getUrunler().then(r => {
       setUrunler(r.data);
@@ -138,6 +157,7 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
     }
     for (const [tip,sec] of Object.entries(secUrun.ozellikler)) {
       if (tip==='AKSESUAR_TIPI'||sec.length===0) continue;
+      if (tip==='MENFEZ_TIPI' && secUrun.kategori==='PANJUR') continue;
       const s=ozellikler[tip];
       if (!s||(Array.isArray(s)?s.length===0:s===''))
         errs.push(`"${OZELLIK_LABEL[tip]||tip}" zorunludur.`);
@@ -159,17 +179,33 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
       }
       // RAL Boyalı değerini birleştir
       const ozelliklerGonder = {...ozellikler};
-      if (ozellikler['RAL']==='Boyalı' && ralKod.trim())
+      if (ralKod.trim()) {
+        // RAL kodu girilmişse her zaman Boyalı
         ozelliklerGonder['RAL'] = `Boyalı - ${ralKod.trim()}`;
+      } else if (ozellikler['RAL']==='Boyalı') {
+        ozelliklerGonder['RAL'] = 'Boyalı';
+      }
+
+      // Servo motor fiyatı
+      const motorFiyatlari = {};
+      const aksesuarSec = ozelliklerGonder['AKSESUAR_TIPI'];
+      const aksesuarList = Array.isArray(aksesuarSec) ? aksesuarSec : (aksesuarSec ? [aksesuarSec] : []);
+      const servoVar = aksesuarList.some(a => a && a.includes('Servo Motor'));
+      if (servoVar && motorFiyat) {
+        const mf = parseFloat(motorFiyat) || 0;
+        // Girilen fiyatı TL'ye çevir
+        const pb = form.paraBirimi;
+        const mfTL = pb==='EUR' ? mf*(kurlar.EUR||42) : pb==='USD' ? mf*(kurlar.USD||38) : mf;
+        motorFiyatlari['Servo Motor'] = mfTL;
+      }
 
       const r = await fiyatHesapla(secUrun.kod, {
-        olcular:oNum, stringOlcular:strOlcular, ozellikler:ozelliklerGonder
+        olcular:oNum, stringOlcular:strOlcular, ozellikler:ozelliklerGonder,
+        motorFiyatlari: Object.keys(motorFiyatlari).length > 0 ? motorFiyatlari : undefined
       });
       const tlFiyat = r.data.toplam;
-      const pb = form.paraBirimi;
-      const fiyat = pb==='EUR' ? tlFiyat/(kurlar.EUR||42)
-                  : pb==='USD' ? tlFiyat/(kurlar.USD||38)
-                  : tlFiyat;
+      // birimFiyat HER ZAMAN TL olarak sakla, gösterimde dövize çevir
+      const fiyat = tlFiyat;
 
       /* Ürün adı oluştur - Swing gibi */
       const olcuEki = (() => {
@@ -178,9 +214,15 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
         if (kasa&&bogaz) return ` (${kasa}/${bogaz})`;
         if (kasa) return ` (${kasa})`;
         if (kasaCap) return ` (${kasaCap})`;
-        const w=olcular['GENISLIK'],h=olcular['YUKSEKLIK'],cap=olcular['CAP']||olcular['BOGAZ_CAP'];
+        const w=olcular['GENISLIK'],h=olcular['YUKSEKLIK'];
+        const cap=olcular['CAP']||olcular['BOGAZ_CAP']||strOlcular['NETIC_CAP']||strOlcular['BOGAZ_CAP'];
+        const uzun=olcular['UZUNLUK'];
+        if (w&&h&&uzun) return ` ${w}x${h} ${uzun} mm`;
+        if (w&&h&&cap) return ` ${w}x${h} Ø${cap}`;
         if (w&&h) return ` ${w}x${h}`;
+        if (cap&&uzun) return ` Ø${cap} ${uzun} mm`;
         if (cap) return ` Ø${cap}`;
+        if (uzun) return ` ${uzun} mm`;
         return '';
       })();
 
@@ -205,14 +247,23 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
         // Menfez Kutusu: W+1 x H+1
         const w = parseInt(olcular['GENISLIK']||0);
         const h = parseInt(olcular['YUKSEKLIK']||0);
-        if (w && h) ad = `Menfez Kutusu ${w+1}x${h+1}`;
+        if (w && h) ad = `Menfez Kutusu ${w+10}x${h+10}`;
         else ad = 'Menfez Kutusu';
       } else if (secUrun.kod === 'BOX_LS') {
-        // Slot Kutusu: "1 Yarıklı ve 500 mm için Slot Kutusu"
-        const slot = olcular['SLOT_SAYISI'] || '';
-        const uzun = olcular['UZUNLUK'] || '';
-        if (slot && uzun) ad = `${slot} Yarıklı ve ${uzun} mm'li Slot Kutusu`;
-        else ad = 'Slot Kutusu';
+        const slot = parseInt(olcular['SLOT_SAYISI'] || 0);
+        const uzun = parseInt(olcular['UZUNLUK'] || 0);
+        const yuk  = parseInt(olcular['YUKSEKLIK'] || 0);
+        // En değerleri slot sayısına göre (cm)
+        const enMap = {1:55, 2:95, 3:125, 4:160, 5:195, 6:230};
+        const boy = uzun ? uzun + 10 : 0; // uzunluk + 1 cm (mm)
+        const en  = enMap[slot] || '';
+        if (slot && uzun && yuk) {
+          ad = `${slot} Yarıklı Slot Difüzör Kutusu — Boy: ${boy} mm / En: ${en} cm / Yükseklik: ${yuk} mm`;
+        } else if (slot && uzun) {
+          ad = `${slot} Yarıklı Slot Difüzör Kutusu — Boy: ${boy} mm${en ? ' / En: ' + en + ' cm' : ''}`;
+        } else {
+          ad = 'Slot Difüzör Kutusu';
+        }
       } else if (secUrun.kod === 'BOX_STR') {
         // Anemostat Kutusu: boğaz, dış (boğaz+150), kutu (boğaz+90)
         const bogaz = strOlcular['KASA_WH'] || '';
@@ -234,7 +285,20 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
         birimFiyat: Math.round(fiyat*100)/100,
         iskonto: 0,
       };
-      setForm(f=>({...f, kalemler:[...f.kalemler, yeniKalem]}));
+
+      if (kalemDuzenle !== null) {
+        // Güncelleme modu
+        const arr = [...form.kalemler];
+        const km = {...arr[kalemDuzenle], ...yeniKalem};
+        km.toplam = (km.birimFiyat||0) * (km.adet||1);
+        arr[kalemDuzenle] = km;
+        setForm(f => ({...f, kalemler: arr}));
+        setKalemDuzenle(null);
+      } else {
+        // Yeni kalem ekleme
+        setForm(f=>({...f, kalemler:[...f.kalemler, yeniKalem]}));
+      }
+      setDegisti(true);
       /* Sadece ölçüler ve miktar sıfırla, kategori/ürün/özellikler kalsın */
       setOlcular({}); setStrOlcular({}); setMiktar(1);
     } catch(e) {
@@ -249,10 +313,10 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
     if (pb==='USD') return fiyat/(kurlar.USD||38);
     return fiyat;
   };
-  const fmt = (v) => v.toLocaleString('tr-TR',{minimumFractionDigits:2});
+  const fmt = (v, sym='') => { const n = (typeof v === 'number' ? v : 0); return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (sym ? ' '+sym : ''); };
 
   /* Kalem işlemleri */
-  const set       = (k,v) => setForm(f=>({...f,[k]:v}));
+  const set       = (k,v) => { setForm(f=>({...f,[k]:v})); setDegisti(true); };
   const kalemSet  = (i,k,v) => {
     const arr=[...form.kalemler];
     arr[i]={...arr[i],[k]:v};
@@ -260,18 +324,45 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
     const net=(km.birimFiyat||0)*(km.adet||1);
     arr[i].toplam=net-net*(km.iskonto||0)/100;
     setForm(f=>({...f,kalemler:arr}));
+    setDegisti(true);
   };
-  const removeKalem = (i) => setForm(f=>({...f,kalemler:f.kalemler.filter((_,idx)=>idx!==i)}));
-  const addManuel   = () => setForm(f=>({...f,kalemler:[...f.kalemler,{...EMPTY_KALEM}]}));
+  const removeKalem = (i) => { setForm(f=>({...f,kalemler:f.kalemler.filter((_,idx)=>idx!==i)})); setDegisti(true); };
+  const insertKalem = (i) => {
+    // i'den sonraya boş kalem ekle — kalemDuzenle'yi o index'e set et
+    const arr = [...form.kalemler];
+    arr.splice(i+1, 0, {urunKodu:'',urunAdi:'',adet:1,birim:'Adet',birimFiyat:0,iskonto:0,toplam:0});
+    setForm(f=>({...f,kalemler:arr}));
+    setDegisti(true);
+  };
+  const moveKalem = (i, yon) => {
+    const arr = [...form.kalemler];
+    const j = i + yon;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setForm(f => ({...f, kalemler: arr}));
+    setDegisti(true);
+  };
+  const addManuel   = () => { setForm(f=>({...f,kalemler:[...f.kalemler,{...EMPTY_KALEM}]})); setDegisti(true); };
 
-  /* Toplam hesap - birimFiyat HER ZAMAN TL saklanır, gösterimde kura çevrilir */
+  /* Toplam hesap - birimFiyat TL, gösterimde kura çevrilir */
   const kalemToplam = (k) => {
-    const net = tleCevir(k.birimFiyat||0) * (k.adet||1);
-    return net - net*(k.iskonto||0)/100;
+    const net = (k.birimFiyat||0) * (k.adet||1);
+    return net;
   };
+  const kalemToplamGoster = (k) => {
+    return tleCevir(kalemToplam(k));
+  };
+  // TL bazlı toplamlar (kayıt için)
   const araToplam   = form.kalemler.reduce((s,k)=>s+kalemToplam(k),0);
-  const kdvTutari   = araToplam*(form.kdvOrani/100);
-  const genelToplam = araToplam+kdvTutari;
+  const iskontoTutari = araToplam * ((form.iskonto||0)/100);
+  const iskontoSonrasi = araToplam - iskontoTutari;
+  const kdvTutari   = iskontoSonrasi*(form.kdvOrani/100);
+  const genelToplam = iskontoSonrasi+kdvTutari;
+  // Gösterim için dövize çevrilmiş toplamlar
+  const araToplam_g   = tleCevir(araToplam);
+  const iskontoTutari_g = tleCevir(iskontoTutari);
+  const kdvTutari_g   = tleCevir(kdvTutari);
+  const genelToplam_g = tleCevir(genelToplam);
 
   const handleSubmit = async () => {
     if (!form.isAdi.trim()) { setError('İş adı zorunludur.'); return; }
@@ -280,7 +371,8 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
       // Toplamları hesaplayıp forma ekle
       const payload = {
         ...form,
-        araToplam,
+        musteriId: form.musteriId ? parseInt(form.musteriId) : null,
+        araToplam: iskontoSonrasi,
         kdvTutari,
         genelToplam,
         kalemler: form.kalemler.map((k,i) => ({
@@ -291,6 +383,7 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
       };
       if (teklif?.id) await updateTeklif(teklif.id, payload);
       else await createTeklif(payload);
+      setDegisti(false);
       onSave();
     } catch(e) {
       setError(e.response?.data?.hata || e.message || 'Bir hata oluştu.');
@@ -326,7 +419,7 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
   /* Özellik input render */
   const renderOzellik = (tip, secenekler) => {
     const isMulti = secUrun?.multiSelectOzellikler?.includes(tip);
-    const isOps   = tip==='AKSESUAR_TIPI';
+    const isOps   = tip==='AKSESUAR_TIPI' || (tip==='MENFEZ_TIPI' && secUrun?.kategori==='PANJUR');
     const s = ozellikler[tip];
     const dolu = isMulti?(Array.isArray(s)&&s.length>0):(s&&s!=='');
     const bc = isOps?(dolu?'var(--green)':'var(--border)'):(dolu?'var(--green)':'var(--red)');
@@ -370,8 +463,15 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
     textTransform:'uppercase', color:'var(--muted)', marginBottom:4
   };
 
+  const handleClose = () => {
+    if (degisti) {
+      if (!window.confirm('Kaydedilmemiş değişiklikler var. Çıkmak istediğinize emin misiniz?')) return;
+    }
+    onClose();
+  };
+
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-overlay">
       <div style={{
         background:'var(--surface)', border:'1px solid var(--border)',
         borderRadius:14, width:'98%', maxWidth:1200,
@@ -383,7 +483,7 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
           <h2 style={{fontFamily:'var(--font-head)'}}>
             {teklif?`Düzenle — ${teklif.teklifNo}`:'Yeni Teklif'}
           </h2>
-          <button className="close-btn" onClick={onClose}>×</button>
+          <button className="close-btn" onClick={handleClose}>×</button>
         </div>
 
         <div style={{flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:14}}>
@@ -403,10 +503,16 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
               </div>
               <div>
                 <label>Müşteri</label>
-                <select className="select" value={form.musteriId||''} onChange={e=>set('musteriId',e.target.value||null)} style={{fontSize:12,padding:'6px 8px'}}>
-                  <option value="">— Seç —</option>
+                <select className="select" value={form.musteriId||''} onChange={e=>set('musteriId', e.target.value ? parseInt(e.target.value) : null)} style={{fontSize:12,padding:'6px 8px',marginBottom:4}}>
+                  <option value="">— Seç veya manuel gir —</option>
                   {musteriler.map(m=><option key={m.id} value={m.id}>{m.firmaAdi}</option>)}
                 </select>
+                {!form.musteriId && (
+                  <input className="input" placeholder="Manuel müşteri adı..."
+                    value={form.musteriAdi||''}
+                    onChange={e=>set('musteriAdi',e.target.value)}
+                    style={{fontSize:12,padding:'6px 8px'}}/>
+                )}
               </div>
               <div>
                 <label>Teklifi Veren</label>
@@ -453,7 +559,11 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
 
           {/* ── BÖLÜM 2: Ürün Seçim (Swing Toolbar gibi) ── */}
           <div style={{background:'var(--surface2)',borderRadius:8,padding:'10px 16px'}}>
-            <div style={colHeadStyle}>Ürün Ekle</div>
+            <div style={colHeadStyle}>
+              {kalemDuzenle !== null
+                ? `✏️ Kalem ${kalemDuzenle + 1} Düzenleniyor — ${form.kalemler[kalemDuzenle]?.urunAdi?.slice(0,40) || ''}`
+                : 'Ürün Ekle'}
+            </div>
 
             {/* Toolbar: Kategori → Ürün → Para Birimi göstergesi */}
             <div style={{display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap',marginBottom:10}}>
@@ -487,7 +597,7 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                   {secUrun.zorunluOlcular.map(olcu=>(
                     <div key={olcu}>
                       <label style={{textTransform:'none',letterSpacing:0,fontWeight:500,color:'var(--text)',fontSize:11}}>
-                        {OLCU_LABEL[olcu]||olcu} <span style={{color:'var(--red)'}}>*</span>
+                        {(secUrun?.kod==='BOX_STR' && olcu==='KASA_WH') ? 'Boğaz Ölçüsü' : (OLCU_LABEL[olcu] || olcu)} <span style={{color:'var(--red)'}}>*</span>
                       </label>
                       {renderOlcu(olcu)}
                     </div>
@@ -511,11 +621,11 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                     <div key={tip}>
                       <label style={{textTransform:'none',letterSpacing:0,fontWeight:500,color:'var(--text)',fontSize:11}}>
                         {OZELLIK_LABEL[tip]||tip}
-                        {tip!=='AKSESUAR_TIPI'&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
+                        {tip!=='AKSESUAR_TIPI'&&!(tip==='MENFEZ_TIPI'&&secUrun?.kategori==='PANJUR')&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
                       </label>
                       {renderOzellik(tip,sec)}
-                      {/* Boyalı seçilince RAL kodu alanı */}
-                      {tip==='RAL' && ozellikler['RAL']==='Boyalı' && (
+                      {/* RAL kodu alanı - her zaman görünür */}
+                      {tip==='RAL' && (
                         <div style={{marginTop:6}}>
                           <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:3}}>
                             RAL Kodu <span style={{color:'var(--muted)',fontSize:10}}>(opsiyonel)</span>
@@ -524,7 +634,10 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                             placeholder="Örn: RAL 9010"
                             style={{fontSize:12,padding:'5px 8px'}}
                             value={ralKod}
-                            onChange={e=>setRalKod(e.target.value)}/>
+                            onChange={e=>{
+                              setRalKod(e.target.value);
+                              if(e.target.value.trim()) setOzellikler(o=>({...o,RAL:'Boyalı'}));
+                            }}/>
                         </div>
                       )}
                     </div>
@@ -540,12 +653,29 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                     <div key={tip}>
                       <label style={{textTransform:'none',letterSpacing:0,fontWeight:500,color:'var(--text)',fontSize:11}}>
                         {OZELLIK_LABEL[tip]||tip}
-                        {tip!=='AKSESUAR_TIPI'&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
+                        {tip!=='AKSESUAR_TIPI'&&!(tip==='MENFEZ_TIPI'&&secUrun?.kategori==='PANJUR')&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
                         {tip==='AKSESUAR_TIPI'&&<span style={{color:'var(--muted)',marginLeft:3,fontSize:10}}>(opsiyonel)</span>}
                       </label>
                       {renderOzellik(tip,sec)}
-                      {/* Boyalı seçilince RAL kodu alanı */}
-                      {tip==='RAL' && ozellikler['RAL']==='Boyalı' && (
+                      {/* Servo Motor seçilince motor fiyatı alanı */}
+                      {tip==='AKSESUAR_TIPI' && (() => {
+                        const ak = ozellikler['AKSESUAR_TIPI'];
+                        const akList = Array.isArray(ak) ? ak : (ak ? [ak] : []);
+                        return akList.some(a => a && a.includes('Servo Motor')) && (
+                          <div style={{marginTop:6}}>
+                            <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:3}}>
+                              Motor Fiyatı ({sym}) <span style={{color:'var(--red)',marginLeft:2}}>*</span>
+                            </label>
+                            <input className="input" type="number" min="0"
+                              placeholder="Motor fiyatı girin..."
+                              style={{fontSize:12,padding:'5px 8px'}}
+                              value={motorFiyat}
+                              onChange={e=>setMotorFiyat(e.target.value)}/>
+                          </div>
+                        );
+                      })()}
+                      {/* RAL kodu alanı - her zaman görünür */}
+                      {tip==='RAL' && (
                         <div style={{marginTop:6}}>
                           <label style={{fontSize:11,color:'var(--muted)',display:'block',marginBottom:3}}>
                             RAL Kodu <span style={{color:'var(--muted)',fontSize:10}}>(opsiyonel)</span>
@@ -554,7 +684,10 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                             placeholder="Örn: RAL 9010"
                             style={{fontSize:12,padding:'5px 8px'}}
                             value={ralKod}
-                            onChange={e=>setRalKod(e.target.value)}/>
+                            onChange={e=>{
+                              setRalKod(e.target.value);
+                              if(e.target.value.trim()) setOzellikler(o=>({...o,RAL:'Boyalı'}));
+                            }}/>
                         </div>
                       )}
                     </div>
@@ -568,8 +701,13 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
               <div style={{display:'flex',alignItems:'center',gap:10,marginTop:10}}>
                 <button className="btn btn-primary" onClick={urunEkle} disabled={hesaplaniyor}
                   style={{padding:'8px 20px'}}>
-                  {hesaplaniyor?'Hesaplanıyor...':'+ Kaleme Ekle'}
+                  {hesaplaniyor ? 'Hesaplanıyor...' : kalemDuzenle !== null ? '✓ Kalemi Güncelle' : '+ Kaleme Ekle'}
                 </button>
+                {kalemDuzenle !== null && (
+                  <button className="btn btn-secondary btn-sm" onClick={() => setKalemDuzenle(null)}>
+                    İptal
+                  </button>
+                )}
                 {fiyatHata && (
                   <span style={{color:'var(--red)',fontSize:12}}>⚠️ {fiyatHata}</span>
                 )}
@@ -593,10 +731,9 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                     <tr>
                       <th style={{width:36}}>#</th>
                       <th>Ürün Adı</th>
-                      <th style={{width:60}}>Adet</th>
-                      <th style={{width:70}}>Birim</th>
+                      <th style={{width:90}}>Adet</th>
+                      <th style={{width:100}}>Birim</th>
                       <th style={{width:110}}>Birim Fiyat ({sym})</th>
-                      <th style={{width:70}}>İsk %</th>
                       <th style={{width:110,textAlign:'right'}}>Toplam ({sym})</th>
                       <th style={{width:32}}></th>
                     </tr>
@@ -608,15 +745,93 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                       </td></tr>
                     )}
                     {form.kalemler.map((k,i)=>(
-                      <tr key={i}>
+                      <React.Fragment key={i}>
+                      {i > 0 && (
+                        <tr>
+                          <td colSpan={6} style={{padding:'0 0 0 36px'}}>
+                            <button onClick={()=>insertKalem(i-1)}
+                              style={{background:'none',border:'1px dashed var(--border)',borderRadius:4,
+                                color:'var(--muted)',cursor:'pointer',fontSize:11,padding:'1px 10px',
+                                width:'100%',textAlign:'left',transition:'all .15s'}}
+                              onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'}
+                              onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+                              + Araya Ekle
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                      <tr>
                         <td style={{color:'var(--muted)',fontSize:12}}>{i+1}</td>
                         <td>
-                          <input className="input" style={{padding:'4px 6px',fontSize:12}} value={k.urunAdi}
-                            onChange={e=>kalemSet(i,'urunAdi',e.target.value)}/>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
+                            <input className="input" style={{padding:'4px 6px',fontSize:12,flex:1}} value={k.urunAdi}
+                              onChange={e=>kalemSet(i,'urunAdi',e.target.value)}/>
+                            {k.urunKodu && (
+                              <button onClick={()=>{ setKalemDuzenle(i); window.scrollTo({top:0,behavior:'smooth'}); }}
+                                title="Ürünü düzenle"
+                                style={{padding:'3px 8px',fontSize:11,cursor:'pointer',flexShrink:0,
+                                  background:'var(--accent)20',border:'1px solid var(--accent)40',
+                                  borderRadius:4,color:'var(--accent)'}}>✏️</button>
+                            )}
+                          </div>
+                          <button onClick={()=>setKalemOzellikAc(kalemOzellikAc===i?null:i)}
+                            style={{marginTop:3,fontSize:11,padding:'2px 8px',
+                              background: kalemOzellikAc===i ? 'var(--accent)' : 'transparent',
+                              border:'1px solid var(--border)',borderRadius:4,
+                              color: kalemOzellikAc===i ? '#000' : 'var(--muted)',cursor:'pointer'}}>
+                            {kalemOzellikAc===i ? '▲ Özellik Kapat' : '▼ Özellik Ekle'}
+                          </button>
+                          {kalemOzellikAc===i && (
+                            <div style={{marginTop:4,padding:'8px 10px',background:'var(--surface2)',
+                              borderRadius:6,border:'1px solid var(--border)'}}>
+                              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                                <span style={{fontSize:11,fontWeight:700,color:'var(--muted)'}}>AÇIKLAMA / ÖZELLİK</span>
+                                <button onClick={()=>setKalemOzellikAc(null)}
+                                  style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:14}}>✕</button>
+                              </div>
+                              <textarea className="input" rows={2}
+                                placeholder="Özellik, not veya açıklama girin..."
+                                style={{fontSize:12,padding:'5px 8px',resize:'vertical',width:'100%'}}
+                                value={k.aciklama||''}
+                                onChange={e=>kalemSet(i,'aciklama',e.target.value)}/>
+                              <div style={{marginTop:8}}>
+                                {Object.entries(ozellikGruplari2).map(([tip, secenekler])=>(
+                                  <div key={tip} style={{marginBottom:8}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:'var(--muted)',
+                                      textTransform:'uppercase',letterSpacing:'.06em',marginBottom:4}}>
+                                      {tip.replace(/_/g,' ')}
+                                      <span style={{fontWeight:400,marginLeft:4,fontSize:9}}>(opsiyonel)</span>
+                                    </div>
+                                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                                      {secenekler.map(opt=>{
+                                        const secili = (k.aciklama||'').split(', ').map(s=>s.trim()).includes(opt);
+                                        return (
+                                          <button key={opt}
+                                            onClick={()=>{
+                                              const mevcut = (k.aciklama||'').split(', ').map(s=>s.trim()).filter(Boolean);
+                                              const yeni = secili ? mevcut.filter(s=>s!==opt) : [...mevcut, opt];
+                                              kalemSet(i,'aciklama',yeni.join(', '));
+                                            }}
+                                            style={{fontSize:10,padding:'2px 8px',cursor:'pointer',
+                                              border: secili ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                              borderRadius:4,
+                                              background: secili ? 'var(--accent)' : 'var(--surface)',
+                                              color: secili ? '#000' : 'var(--text)',
+                                              fontWeight: secili ? 700 : 400}}>
+                                            {secili ? '✓ ' : ''}{opt}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </td>
                         <td>
-                          <input className="input" type="number" min="1" style={{padding:'4px 6px',fontSize:12}} value={k.adet}
-                            onChange={e=>kalemSet(i,'adet',parseInt(e.target.value)||1)}/>
+                          <input className="input" type="number" min="0.01" step={k.birim==='m²'||k.birim==='m'?'0.01':'1'} style={{padding:'4px 6px',fontSize:12}} value={k.adet}
+                            onChange={e=>{const v=k.birim==='m²'||k.birim==='m'?parseFloat(e.target.value)||1:parseInt(e.target.value)||1;kalemSet(i,'adet',v);}}/>
                         </td>
                         <td>
                           <select className="select" style={{padding:'4px 6px',fontSize:12}} value={k.birim}
@@ -629,17 +844,20 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
                             value={Math.round(tleCevir(k.birimFiyat||0)*100)/100}
                             onChange={e=>{const v=parseFloat(e.target.value)||0;const pb=form.paraBirimi;const tlV=pb==="EUR"?v*(kurlar.EUR||42):pb==="USD"?v*(kurlar.USD||38):v;kalemSet(i,"birimFiyat",tlV);}}/>
                         </td>
-                        <td>
-                          <input className="input" type="number" min="0" max="100" style={{padding:'4px 6px',fontSize:12}} value={k.iskonto}
-                            onChange={e=>kalemSet(i,'iskonto',parseFloat(e.target.value)||0)}/>
-                        </td>
                         <td style={{textAlign:'right',fontWeight:500,color:'var(--accent)',whiteSpace:'nowrap',fontSize:13}}>
-                          {fmt(kalemToplam(k))}
+                          {fmt(kalemToplamGoster(k), sym)}
                         </td>
                         <td>
+                          <div style={{display:'flex',flexDirection:'column',gap:1}}>
+                            <button onClick={()=>moveKalem(i,-1)} disabled={i===0}
+                              style={{background:'none',border:'none',cursor:i===0?'default':'pointer',fontSize:10,padding:'1px 4px',color:i===0?'var(--border)':'var(--muted)',lineHeight:1}}>▲</button>
+                            <button onClick={()=>moveKalem(i,1)} disabled={i===form.kalemler.length-1}
+                              style={{background:'none',border:'none',cursor:i===form.kalemler.length-1?'default':'pointer',fontSize:10,padding:'1px 4px',color:i===form.kalemler.length-1?'var(--border)':'var(--muted)',lineHeight:1}}>▼</button>
+                          </div>
                           <button onClick={()=>removeKalem(i)} style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontSize:16,padding:'2px 4px'}}>×</button>
                         </td>
                       </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -647,36 +865,272 @@ export default function TeklifForm({ teklif, onSave, onClose, kullanici }) {
 
               {/* Toplam satırı - tablo içinde sağa hizalı */}
               {form.kalemler.length>0 && (
-                <div style={{display:'flex',justifyContent:'flex-end',padding:'10px 16px',
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',padding:'10px 16px',
                   borderTop:'1px solid var(--border)',background:'var(--surface2)'}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:220}}>
-                    {[['Ara Toplam',araToplam],[`KDV (%${form.kdvOrani})`,kdvTutari],['Genel Toplam',genelToplam]]
-                      .map(([lbl,val],i)=>(
-                      <div key={lbl} style={{display:'flex',justifyContent:'space-between',
-                        borderTop:i===2?'1px solid var(--border)':'none',
-                        paddingTop:i===2?6:0,
-                        fontWeight:i===2?700:400,
-                        color:i===2?'var(--accent)':'var(--text)',fontSize:13}}>
-                        <span>{lbl}</span>
-                        <span>{fmt(val)} {sym}</span>
+                  {/* Genel iskonto */}
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <label style={{margin:0,fontSize:12,color:'var(--muted)'}}>Genel İskonto %</label>
+                    <input className="input" type="number" min="0" max="100" step="0.1"
+                      style={{width:80,padding:'4px 8px',fontSize:13}}
+                      value={form.iskonto||0}
+                      onChange={e=>{set('iskonto',parseFloat(e.target.value)||0);}}/>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:4,minWidth:260}}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}>
+                      <span style={{color:'var(--muted)'}}>Toplam Adet</span>
+                      <span>{form.kalemler.reduce((s,k)=>s+(k.adet||1),0)} Adet</span>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}>
+                      <span style={{color:'var(--muted)'}}>Ara Toplam</span>
+                      <span>{fmt(araToplam_g)} {sym}</span>
+                    </div>
+                    {(form.iskonto||0)>0 && (
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'var(--green)'}}>
+                        <span>İskonto (%{form.iskonto})</span>
+                        <span>-{fmt(iskontoTutari_g)} {sym}</span>
                       </div>
-                    ))}
+                    )}
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}>
+                      <span style={{color:'var(--muted)'}}>{`KDV (%${form.kdvOrani})`}</span>
+                      <span>{fmt(kdvTutari_g)} {sym}</span>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:700,
+                      color:'var(--accent)',borderTop:'1px solid var(--border)',paddingTop:6}}>
+                      <span>Genel Toplam</span>
+                      <span>{fmt(genelToplam_g)} {sym}</span>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Kalem Düzenleme artık ürün panelinde yapılıyor */}
+
           {error && <div style={{color:'var(--red)',fontSize:13}}>{error}</div>}
         </div>
 
         {/* FOOTER */}
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>İptal</button>
+          <button className="btn btn-secondary" onClick={handleClose}>İptal</button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
             {loading?'Kaydediliyor...':(teklif?'Güncelle':'Kaydet')}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Kalem Düzenleme Modali ─────────────────────────────── */
+function KalemDuzenleModal({ kalem, urunler, kurlar, paraBirimi, onKaydet, onKapat }) {
+  const urun = urunler.find(u => u.kod === kalem.urunKodu);
+  const [olcular, setOlcular] = useState({});
+  const [strOlcular, setStrOlcular] = useState({});
+  const [ozellikler, setOzellikler] = useState({});
+  const [ralKod, setRalKod] = useState('');
+  const [miktar, setMiktar] = useState(kalem.adet || 1);
+  const [motorFiyat, setMotorFiyat] = useState('');
+  const [hesaplaniyor, setHesaplaniyor] = useState(false);
+  const [fiyatHata, setFiyatHata] = useState('');
+  const [yeniFiyat, setYeniFiyat] = useState(null);
+  const [manuelAd, setManuelAd] = useState(kalem.urunAdi || '');
+  const sym = paraBirimi === 'EUR' ? '€' : paraBirimi === 'USD' ? '$' : '₺';
+
+  const tleCevir = (v) => {
+    if (paraBirimi === 'EUR') return v / (kurlar.EUR || 42);
+    if (paraBirimi === 'USD') return v / (kurlar.USD || 38);
+    return v;
+  };
+
+  // Mevcut kalemden ölçü ve özellikleri parse et
+  useEffect(() => {
+    if (!urun) return;
+    const ad = kalem.urunAdi || '';
+    // WxH parse
+    const mWH = ad.match(/(\d+)[xX×](\d+)/);
+    if (mWH) { setOlcular(o => ({...o, GENISLIK: mWH[1], YUKSEKLIK: mWH[2]})); }
+    // Çap parse
+    const mCap = ad.match(/Ø\s*(\d+)/);
+    if (mCap) { setOlcular(o => ({...o, CAP: mCap[1]})); }
+    // Uzunluk parse
+    const mL = ad.match(/(\d+)\s*mm/);
+    if (mL && !mWH) { setOlcular(o => ({...o, UZUNLUK: mL[1]})); }
+    // Özellikler parse
+    if (ad.includes(' — ')) {
+      const ops = ad.split(' — ')[1].split(' / ');
+      const o = {};
+      ops.forEach(op => {
+        op = op.trim();
+        if (op.includes('mm')) o['CERCEVE_TIPI'] = op;
+        else if (op.includes('Damper') || op.includes('damper')) o['DAMPER_TIPI'] = op;
+        else if (op.includes('Boyal') || op.includes('Boyasız') || op.includes('Eloksal')) o['RAL'] = op;
+        else if (op.includes('Vidalı') || op.includes('Klipsli') || op.includes('Montaj')) o['MONTAJ'] = op;
+      });
+      setOzellikler(o);
+      if (o['RAL'] && o['RAL'].includes('Boyalı - ')) {
+        setRalKod(o['RAL'].replace('Boyalı - ', ''));
+        setOzellikler(prev => ({...prev, RAL: 'Boyalı'}));
+      }
+    }
+  }, []);
+
+  const hesaplaFiyat = async () => {
+    if (!urun) return;
+    setHesaplaniyor(true); setFiyatHata('');
+    try {
+      const ozelliklerGonder = {...ozellikler};
+      if (ozellikler['RAL'] === 'Boyalı' && ralKod.trim())
+        ozelliklerGonder['RAL'] = `Boyalı - ${ralKod.trim()}`;
+
+      const oNum = {};
+      Object.entries(olcular).forEach(([k,v]) => { const n = parseFloat(v); if (!isNaN(n)) oNum[k] = n; });
+
+      const res = await fiyatHesapla(urun.kod, {
+        olcular: oNum, stringOlcular: strOlcular,
+        ozellikler: ozelliklerGonder, motorFiyati: motorFiyat ? parseFloat(motorFiyat) : null
+      });
+      setYeniFiyat(res.data.toplam);
+      // Ürün adını da güncelle
+      if (res.data.urunAdi) setManuelAd(urun.ad);
+    } catch(e) { setFiyatHata(e.response?.data?.hata || 'Hesaplanamadı'); }
+    finally { setHesaplaniyor(false); }
+  };
+
+  const handleKaydet = () => {
+    if (!urun) { onKapat(); return; }
+    const ozelliklerGonder = {...ozellikler};
+    if (ozellikler['RAL'] === 'Boyalı' && ralKod.trim())
+      ozelliklerGonder['RAL'] = `Boyalı - ${ralKod.trim()}`;
+
+    // Ürün adını yeniden oluştur
+    const w = olcular['GENISLIK'], h = olcular['YUKSEKLIK'];
+    const cap = olcular['CAP'] || strOlcular['NETIC_CAP'];
+    const uzun = olcular['UZUNLUK'];
+    let olcuEki = '';
+    if (w && h && cap) olcuEki = ` ${w}x${h} Ø${cap}`;
+    else if (w && h) olcuEki = ` ${w}x${h}`;
+    else if (cap) olcuEki = ` Ø${cap}`;
+    else if (uzun) olcuEki = ` ${uzun} mm`;
+
+    const menfezTipi = ozelliklerGonder['MENFEZ_TIPI'];
+    const menfezEki = menfezTipi ? ` ${menfezTipi}` : '';
+    const suffix = Object.entries(ozelliklerGonder)
+      .filter(([k,v]) => k === 'AKSESUAR_TIPI' && v && (Array.isArray(v) ? v.length > 0 : v !== ''))
+      .map(([,v]) => Array.isArray(v) ? v.join(', ') : v).join(' / ');
+
+    let ad = urun.ad + menfezEki + olcuEki;
+    if (suffix) ad += ' — ' + suffix;
+
+    const cerceve = ozelliklerGonder['CERCEVE_TIPI'];
+    const damper = ozelliklerGonder['DAMPER_TIPI'];
+    const ral = ozelliklerGonder['RAL'];
+    const montaj = ozelliklerGonder['MONTAJ'];
+    const ozellikParcalar = [cerceve, damper, ral, montaj].filter(Boolean);
+    if (ozellikParcalar.length) ad += (suffix ? ' / ' : ' — ') + ozellikParcalar.join(' / ');
+
+    // Eğer kullanıcı manuel ad girdiyse onu kullan, yoksa otomatik oluşturulanı
+    const finalAd = manuelAd.trim() && manuelAd !== kalem.urunAdi ? manuelAd.trim() : ad;
+
+    onKaydet({
+      ...kalem,
+      urunAdi: finalAd,
+      birimFiyat: yeniFiyat !== null ? yeniFiyat : kalem.birimFiyat,
+      adet: miktar,
+    });
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',display:'flex',
+      alignItems:'center',justifyContent:'center',zIndex:2000,padding:20}}>
+      <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:14,
+        width:'100%',maxWidth:700,maxHeight:'90vh',overflowY:'auto',padding:24}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <h3 style={{fontFamily:'var(--font-head)',fontSize:16,margin:0}}>
+            {urun ? urun.ad : kalem.urunAdi} — Düzenle
+          </h3>
+          <button onClick={onKapat} style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:20}}>×</button>
+        </div>
+
+        {!urun ? (
+          <div style={{color:'var(--muted)',fontSize:13}}>Bu kalem manuel eklenmiş, düzenleme yapılamaz.</div>
+        ) : (
+          <>
+            {/* Ölçüler */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',marginBottom:8}}>Ölçüler</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                {urun.zorunluOlcular && urun.zorunluOlcular.map(olcu => (
+                  <div key={olcu}>
+                    <label style={{fontSize:11}}>{olcu.replace(/_/g,' ')}</label>
+                    <input className="input" type="number" style={{fontSize:12,padding:'5px 8px'}}
+                      value={olcular[olcu] || ''}
+                      onChange={e => setOlcular(o => ({...o,[olcu]:e.target.value}))}/>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Özellikler */}
+            {urun.ozellikler && Object.keys(urun.ozellikler).length > 0 && (
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',marginBottom:8}}>Özellikler</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  {Object.entries(urun.ozellikler).map(([tip, secenekler]) => (
+                    <div key={tip}>
+                      <label style={{fontSize:11}}>{tip.replace(/_/g,' ')}</label>
+                      <select className="select" style={{fontSize:12,padding:'5px 8px'}}
+                        value={ozellikler[tip] || ''}
+                        onChange={e => setOzellikler(o => ({...o,[tip]:e.target.value}))}>
+                        <option value="">Seç...</option>
+                        {secenekler.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      {tip === 'RAL' && ozellikler['RAL'] === 'Boyalı' && (
+                        <input className="input" placeholder="RAL kodu" style={{fontSize:12,padding:'4px 8px',marginTop:4}}
+                          value={ralKod} onChange={e => setRalKod(e.target.value)}/>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ürün Adı */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--muted)',textTransform:'uppercase',marginBottom:6}}>Ürün Adı</div>
+              <input className="input" style={{fontSize:12,padding:'6px 8px'}}
+                value={manuelAd}
+                onChange={e => setManuelAd(e.target.value)}
+                placeholder="Ürün adını düzenle..."/>
+              <div style={{fontSize:10,color:'var(--muted)',marginTop:3}}>
+                Fiyat Hesapla butonuna basınca otomatik güncellenir. Manuel değiştirmek için düzenle.
+              </div>
+            </div>
+
+            {/* Miktar */}
+            <div style={{marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+              <label style={{fontSize:11,margin:0}}>Adet</label>
+              <input className="input" type="number" min="1" style={{width:80,fontSize:12,padding:'5px 8px'}}
+                value={miktar} onChange={e => setMiktar(parseInt(e.target.value)||1)}/>
+            </div>
+
+            {fiyatHata && <div style={{color:'var(--red)',fontSize:12,marginBottom:8}}>{fiyatHata}</div>}
+
+            {yeniFiyat !== null && (
+              <div style={{color:'var(--green)',fontSize:13,marginBottom:8,fontWeight:600}}>
+                Yeni Birim Fiyat: {(tleCevir(yeniFiyat)).toLocaleString('tr-TR',{minimumFractionDigits:2})} {sym}
+              </div>
+            )}
+
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}}>
+              <button className="btn btn-secondary" onClick={onKapat}>İptal</button>
+              <button className="btn btn-secondary" onClick={hesaplaFiyat} disabled={hesaplaniyor}>
+                {hesaplaniyor ? 'Hesaplanıyor...' : '🔄 Fiyat Hesapla'}
+              </button>
+              <button className="btn btn-primary" onClick={handleKaydet}>Kaydet</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

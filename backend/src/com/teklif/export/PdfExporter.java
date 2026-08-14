@@ -6,48 +6,38 @@ import com.itextpdf.text.pdf.draw.LineSeparator;
 import com.teklif.model.ParaBirimi;
 import com.teklif.model.takip.Teklif;
 import com.teklif.model.takip.TeklifKalem;
-import com.teklif.pricing.KurService;
 
 import java.io.ByteArrayOutputStream;
 
 public class PdfExporter {
 
-    // Renkler
     private static final BaseColor BG_HEADER  = new BaseColor(14, 17, 23);
     private static final BaseColor ACCENT     = new BaseColor(245, 158, 11);
     private static final BaseColor ROW_ALT    = new BaseColor(30, 37, 53);
     private static final BaseColor TEXT_MUTED = new BaseColor(100, 116, 139);
     private static final BaseColor WHITE      = BaseColor.WHITE;
 
-    // Fontlar
-    private static Font fontTitle()   { return new Font(Font.FontFamily.HELVETICA, 22, Font.BOLD,   ACCENT); }
-    private static Font fontSub()     { return new Font(Font.FontFamily.HELVETICA, 9,  Font.NORMAL, TEXT_MUTED); }
-    private static Font fontLabel()   { return new Font(Font.FontFamily.HELVETICA, 8,  Font.BOLD,   TEXT_MUTED); }
-    private static Font fontValue()   { return new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, WHITE); }
-    private static Font fontBold()    { return new Font(Font.FontFamily.HELVETICA, 10, Font.BOLD,   WHITE); }
-    private static Font fontSmall()   { return new Font(Font.FontFamily.HELVETICA, 8,  Font.NORMAL, TEXT_MUTED); }
-    private static Font fontTotal()   { return new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD,   ACCENT); }
-    private static Font fontThHead()  { return new Font(Font.FontFamily.HELVETICA, 8,  Font.BOLD,   TEXT_MUTED); }
-    private static Font fontTd()      { return new Font(Font.FontFamily.HELVETICA, 9,  Font.NORMAL, WHITE); }
-
-    public static byte[] exportToBytes(Teklif t) throws Exception {
-        return exportToBytes(t, null);
+    // Türkçe destekli font — iText built-in encoding ile
+    private static BaseFont bf() {
+        try {
+            return BaseFont.createFont(BaseFont.HELVETICA, "CP1254", BaseFont.EMBEDDED);
+        } catch (Exception e) {
+            try { return BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.EMBEDDED); }
+            catch (Exception ex) { return null; }
+        }
     }
 
-    public static byte[] exportToBytes(Teklif t, ParaBirimi pb) throws Exception {
-        // Para birimi: parametre yoksa tekliften al
-        final ParaBirimi paraBirimi;
-        if (pb != null) {
-            paraBirimi = pb;
-        } else {
-            ParaBirimi tmp;
-            try {
-                String pbStr = t.getParaBirimi() == null ? "TL" : t.getParaBirimi().toUpperCase().trim();
-                if ("TRY".equals(pbStr)) pbStr = "TL";
-                tmp = ParaBirimi.valueOf(pbStr);
-            } catch (Exception e) { tmp = ParaBirimi.TL; }
-            paraBirimi = tmp;
-        }
+    private static Font fontTitle()  { return new Font(bf(), 22, Font.BOLD,   ACCENT); }
+    private static Font fontSub()    { return new Font(bf(), 9,  Font.NORMAL, TEXT_MUTED); }
+    private static Font fontLabel()  { return new Font(bf(), 8,  Font.BOLD,   TEXT_MUTED); }
+    private static Font fontValue()  { return new Font(bf(), 10, Font.NORMAL, WHITE); }
+    private static Font fontBold()   { return new Font(bf(), 10, Font.BOLD,   WHITE); }
+    private static Font fontSmall()  { return new Font(bf(), 8,  Font.NORMAL, TEXT_MUTED); }
+    private static Font fontTotal()  { return new Font(bf(), 11, Font.BOLD,   ACCENT); }
+    private static Font fontThHead() { return new Font(bf(), 8,  Font.BOLD,   TEXT_MUTED); }
+    private static Font fontTd()     { return new Font(bf(), 9,  Font.NORMAL, WHITE); }
+
+    public static byte[] exportToBytes(Teklif t, ParaBirimi paraBirimi) throws Exception {
 
         Document doc = new Document(PageSize.A4, 36, 36, 40, 40);
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -59,23 +49,20 @@ public class PdfExporter {
         cb.rectangle(0, 0, PageSize.A4.getWidth(), PageSize.A4.getHeight());
         cb.fill();
 
-        // ── HEADER ───────────────────────────────────────────────
+        // HEADER
         PdfPTable header = new PdfPTable(2);
         header.setWidthPercentage(100);
         header.setWidths(new float[]{1f, 1f});
         header.setSpacingAfter(20);
 
-        // Sol: logo / firma
         PdfPCell left = new PdfPCell();
-        left.setBorder(0);
-        left.setPadding(0);
+        left.setBorder(0); left.setPadding(0);
         Paragraph title = new Paragraph("TEKLİF", fontTitle());
         title.setSpacingAfter(2);
         left.addElement(title);
         left.addElement(new Paragraph("TAKİP SİSTEMİ", fontSub()));
         header.addCell(left);
 
-        // Sağ: teklif no + tarih
         PdfPCell right = new PdfPCell();
         right.setBorder(0); right.setPadding(0);
         right.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -88,38 +75,36 @@ public class PdfExporter {
         header.addCell(right);
         doc.add(header);
 
-        // ── AYIRICI ──────────────────────────────────────────────
         LineSeparator ls = new LineSeparator(1f, 100f, ACCENT, Element.ALIGN_LEFT, 0);
         doc.add(new Chunk(ls));
         doc.add(Chunk.NEWLINE);
 
-        // ── BİLGİ SATIRLARI ──────────────────────────────────────
+        // BİLGİ SATIRLARI
         PdfPTable info = new PdfPTable(4);
         info.setWidthPercentage(100);
         info.setWidths(new float[]{1f, 1.5f, 1f, 1.5f});
         info.setSpacingBefore(8);
         info.setSpacingAfter(20);
 
-        addInfoCell(info, "İŞ ADI",         t.getIsAdi());
-        addInfoCell(info, "MÜŞTERİ",        t.getMusteri() != null ? t.getMusteri().getFirmaAdi() : "—");
-        addInfoCell(info, "TEKLİFİ VEREN",  nvl(t.getTeklifiVeren()));
-        addInfoCell(info, "GEÇERLİLİK",     nvl(t.getGecerlilikTarihi()));
-        addInfoCell(info, "DURUM",           t.getDurum().name());
-        addInfoCell(info, "PARA BİRİMİ",    t.getParaBirimi());
-        addInfoCell(info, "KDV ORANI",      "%" + (int) t.getKdvOrani());
-        addInfoCell(info, "YETKİLİ",        t.getMusteri() != null ? nvl(t.getMusteri().getYetkili()) : "—");
+        addInfoCell(info, "İŞ ADI",        t.getIsAdi());
+        addInfoCell(info, "MÜŞTERİ",       t.getMusteri() != null ? t.getMusteri().getFirmaAdi() : "—");
+        addInfoCell(info, "YETKİLİ",       t.getMusteri() != null ? nvl(t.getMusteri().getYetkili()) : "—");
+        addInfoCell(info, "TELEFON",        t.getMusteri() != null ? nvl(t.getMusteri().getTelefon()) : "—");
+        addInfoCell(info, "TEKLİFİ VEREN", nvl(t.getTeklifiVeren()));
+        addInfoCell(info, "GEÇERLİLİK",    nvl(t.getGecerlilikTarihi()));
+        addInfoCell(info, "DURUM",          t.getDurum().name());
+        addInfoCell(info, "PARA BİRİMİ",   t.getParaBirimi());
         doc.add(info);
 
-        // ── KALEMLER TABLOSU ────────────────────────────────────
-        String[] cols     = {"#", "ÜRÜN ADI", "ADET", "BİRİM", "BİRİM FİYAT", "İSK.%", "TOPLAM"};
-        float[]  colWidths = {0.4f, 3.5f, 0.6f, 0.7f, 1.2f, 0.6f, 1.2f};
+        // KALEMLER TABLOSU
+        String[] cols      = {"#", "ÜRÜN ADI", "ADET", "BİRİM", "BİRİM FİYAT", "TOPLAM"};
+        float[]  colWidths = {0.4f, 4f, 0.6f, 0.7f, 1.2f, 1.2f};
 
         PdfPTable table = new PdfPTable(cols.length);
         table.setWidthPercentage(100);
         table.setWidths(colWidths);
         table.setSpacingAfter(16);
 
-        // Başlık satırı
         for (String c : cols) {
             PdfPCell th = new PdfPCell(new Phrase(c, fontThHead()));
             th.setBackgroundColor(new BaseColor(22, 27, 38));
@@ -130,34 +115,31 @@ public class PdfExporter {
             table.addCell(th);
         }
 
-        // Kalem satırları
         boolean alt = false;
         int sira = 1;
         for (TeklifKalem k : t.getKalemler()) {
             BaseColor bg = alt ? ROW_ALT : BG_HEADER;
-            addTd(table, String.valueOf(sira++),                                      bg, Element.ALIGN_CENTER);
-            addTd(table, k.getUrunAdi(),                                              bg, Element.ALIGN_LEFT);
-            addTd(table, String.valueOf(k.getAdet()),                                 bg, Element.ALIGN_CENTER);
-            addTd(table, nvl(k.getBirim()),                                           bg, Element.ALIGN_CENTER);
-            addTd(table, fmt(KurService.cevir(k.getBirimFiyat(), paraBirimi)) + paraBirimi.getSymbol(),            bg, Element.ALIGN_RIGHT);
-            addTd(table, k.getIskonto() > 0 ? fmt(k.getIskonto()) + "%" : "—",       bg, Element.ALIGN_CENTER);
-            addTd(table, fmt(KurService.cevir(k.getToplam(), paraBirimi)) + paraBirimi.getSymbol(),                bg, Element.ALIGN_RIGHT);
+            addTd(table, String.valueOf(sira++),                           bg, Element.ALIGN_CENTER);
+            addTd(table, k.getUrunAdi(),                                   bg, Element.ALIGN_LEFT);
+            addTd(table, String.valueOf(k.getAdet()),                      bg, Element.ALIGN_CENTER);
+            addTd(table, nvl(k.getBirim()),                                bg, Element.ALIGN_CENTER);
+            addTd(table, fmt(k.getBirimFiyat()) + " " + t.getParaBirimi(),bg, Element.ALIGN_RIGHT);
+            addTd(table, fmt(k.getToplam())     + " " + t.getParaBirimi(),bg, Element.ALIGN_RIGHT);
             alt = !alt;
         }
         doc.add(table);
 
-        // ── TOPLAMLAR ────────────────────────────────────────────
+        // TOPLAMLAR
         PdfPTable totals = new PdfPTable(2);
         totals.setWidthPercentage(40);
         totals.setHorizontalAlignment(Element.ALIGN_RIGHT);
         totals.setWidths(new float[]{1.5f, 1f});
 
-        addTotalRow(totals, "Ara Toplam",                        fmt(KurService.cevir(t.getAraToplam(), paraBirimi)) + paraBirimi.getSymbol(), false);
-        addTotalRow(totals, "KDV (%" + (int)t.getKdvOrani()+")",fmt(KurService.cevir(t.getKdvTutari(), paraBirimi)) + paraBirimi.getSymbol(), false);
-        addTotalRow(totals, "GENEL TOPLAM",                      fmt(KurService.cevir(t.getGenelToplam(), paraBirimi)) + paraBirimi.getSymbol(), true);
+        addTotalRow(totals, "Ara Toplam",                         fmt(t.getAraToplam())   + " " + t.getParaBirimi(), false);
+        addTotalRow(totals, "KDV (%" + (int)t.getKdvOrani() + ")",fmt(t.getKdvTutari())  + " " + t.getParaBirimi(), false);
+        addTotalRow(totals, "GENEL TOPLAM",                       fmt(t.getGenelToplam()) + " " + t.getParaBirimi(), true);
         doc.add(totals);
 
-        // ── NOTLAR ───────────────────────────────────────────────
         if (t.getNotlar() != null && !t.getNotlar().isBlank()) {
             doc.add(Chunk.NEWLINE);
             Paragraph notP = new Paragraph("Notlar: " + t.getNotlar(), fontSmall());
@@ -165,7 +147,6 @@ public class PdfExporter {
             doc.add(notP);
         }
 
-        // ── FOOTER ───────────────────────────────────────────────
         doc.add(Chunk.NEWLINE);
         LineSeparator ls2 = new LineSeparator(0.5f, 100f, TEXT_MUTED, Element.ALIGN_LEFT, 0);
         doc.add(new Chunk(ls2));

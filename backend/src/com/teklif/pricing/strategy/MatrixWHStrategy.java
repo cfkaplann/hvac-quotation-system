@@ -26,76 +26,59 @@ public class MatrixWHStrategy implements PricingStrategy {
             double maxW = repo.maxAxis(conn, tableId, "ROW");
             double maxH = repo.maxAxis(conn, tableId, "COL");
 
-            double toplamFiyat = 0;
+            boolean wDisi = w > maxW;
+            boolean hDisi = h > maxH;
 
-            // ===============================
-            // W FULL + REMAIN
-            // ===============================
+            // ── İkisi de tablo içinde → direkt değer ──────────
+            if (!wDisi && !hDisi) {
+                double wCeil = repo.ceilingAxis(conn, tableId, "ROW", w);
+                double hCeil = repo.ceilingAxis(conn, tableId, "COL", h);
+                return repo.cellPrice(conn, tableId, wCeil, hCeil);
+            }
+
+            // ── İkisi de tablo dışında → alan oranı ──────────
+            if (wDisi && hDisi) {
+                double fiyatRef = repo.cellPrice(conn, tableId, maxW, maxH);
+                double alanOrani = (w * h) / (maxW * maxH);
+                return fiyatRef * alanOrani;
+            }
+
+            // ── Sadece biri tablo dışında → eski bölme yöntemi ──
+            double toplamFiyat = 0;
 
             int wFull = (int)(w / maxW);
             double wRemain = w % maxW;
-
-            // ===============================
-            // H FULL + REMAIN
-            // ===============================
-
             int hFull = (int)(h / maxH);
             double hRemain = h % maxH;
 
-            // ===============================
-            // FULL GRID
-            // ===============================
-
-            if(wFull > 0 && hFull > 0){
-
-                double wMax = repo.ceilingAxis(conn, tableId, "ROW", maxW);
-                double hMax = repo.ceilingAxis(conn, tableId, "COL", maxH);
-
-                double fiyat = repo.cellPrice(conn, tableId, wMax, hMax);
-
+            if (wFull > 0 && hFull > 0) {
+                double fiyat = repo.cellPrice(conn, tableId, maxW, maxH);
                 toplamFiyat += wFull * hFull * fiyat;
             }
-
-            // ===============================
-            // W FULL × H REMAIN
-            // ===============================
-
-            if(wFull > 0 && hRemain > 0){
-
-                double wMax = repo.ceilingAxis(conn, tableId, "ROW", maxW);
+            if (wFull > 0 && hRemain > 0) {
                 double hC = repo.ceilingAxis(conn, tableId, "COL", hRemain);
-
-                double fiyat = repo.cellPrice(conn, tableId, wMax, hC);
-
+                double fiyat = repo.cellPrice(conn, tableId, maxW, hC);
                 toplamFiyat += wFull * fiyat;
             }
-
-            // ===============================
-            // W REMAIN × H FULL
-            // ===============================
-
-            if(wRemain > 0 && hFull > 0){
-
+            if (wRemain > 0 && hFull > 0) {
                 double wC = repo.ceilingAxis(conn, tableId, "ROW", wRemain);
-                double hMax = repo.ceilingAxis(conn, tableId, "COL", maxH);
-
-                double fiyat = repo.cellPrice(conn, tableId, wC, hMax);
-
+                double fiyat = repo.cellPrice(conn, tableId, wC, maxH);
                 toplamFiyat += hFull * fiyat;
             }
-
-            // ===============================
-            // REMAIN × REMAIN
-            // ===============================
-
-            if(wRemain > 0 && hRemain > 0){
-
+            if (wRemain > 0 && hRemain > 0) {
                 double wC = repo.ceilingAxis(conn, tableId, "ROW", wRemain);
                 double hC = repo.ceilingAxis(conn, tableId, "COL", hRemain);
-
                 double fiyat = repo.cellPrice(conn, tableId, wC, hC);
-
                 toplamFiyat += fiyat;
+            }
+            // Sadece bir eksen tam, diğeri 0 kalan
+            if (wFull > 0 && hRemain == 0 && hFull == 0) {
+                double fiyat = repo.cellPrice(conn, tableId, maxW, repo.ceilingAxis(conn, tableId, "COL", h));
+                toplamFiyat += wFull * fiyat;
+            }
+            if (hFull > 0 && wRemain == 0 && wFull == 0) {
+                double fiyat = repo.cellPrice(conn, tableId, repo.ceilingAxis(conn, tableId, "ROW", w), maxH);
+                toplamFiyat += hFull * fiyat;
             }
 
             return toplamFiyat;
@@ -104,5 +87,4 @@ public class MatrixWHStrategy implements PricingStrategy {
             throw new RuntimeException(e);
         }
     }
-
 }

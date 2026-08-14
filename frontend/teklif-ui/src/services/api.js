@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: 'http://localhost:8080/api' });
+const API = axios.create({ baseURL: '/api' });
 
 // Her istekte token header'ı otomatik ekle
 API.interceptors.request.use(config => {

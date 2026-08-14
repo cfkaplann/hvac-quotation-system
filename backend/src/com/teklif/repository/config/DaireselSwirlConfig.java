@@ -190,9 +190,43 @@ public class DaireselSwirlConfig {
 			    null,
 			    bogazCapLabel()
             ),
+            
+            new UrunKart(
+                    "DASWRDIF_JETNOZTEK",
+                    UrunKategori.DAIRESEL_SWIRL,
+                    "Jet Nozul (Tek Cidarlı)",
+                    List.of(
+                        OzellikTipi.RAL,
+                        OzellikTipi.MONTAJ
+                    ),
+                    Map.of(
+                        OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"),
+                        OzellikTipi.MONTAJ, List.of("Vidalı", "Gizli Vidalı")
+                    ),
+                    List.of(OlcuAlanTipi.KASA_CAP),
+
+    			    // ⭐⭐⭐ ÖLÇÜ DEĞERLERİ BURAYA
+    			    Map.of(
+    			        OlcuAlanTipi.KASA_CAP,
+    			        List.of(
+    			            "Ø80",
+    			            "Ø120",
+    			            "Ø160",
+    			            "Ø200",
+    			            "Ø250",
+    			            "Ø315",
+    			            "Ø400"
+    			            
+    			        )
+    			    ),
+
+    			    true,
+    			    null,
+    			    bogazCapLabel()
+                ),
 
             new UrunKart(
-                "DASWRDIF_JETNOZ",
+                "DASWRDIF_JETNOZCIFT",
                 UrunKategori.DAIRESEL_SWIRL,
                 "Jet Nozul (Çift Cidarlı)",
                 List.of(

@@ -12,11 +12,12 @@ public class Teklif {
     private int revizeNo;
     private String isAdi;
     private Integer musteriId;
+    private String musteriAdi;
     private Musteri musteri;
     private String teklifTarihi;
     private String gecerlilikTarihi;
     private String teklifiVeren;
-    private String paraBirimi = "TL";
+    private String paraBirimi = "TRY";
     private double kdvOrani   = 20.0;
     private double araToplam;
     private double kdvTutari;
@@ -43,6 +44,8 @@ public class Teklif {
     public void setIsAdi(String isAdi) { this.isAdi = isAdi; }
     public Integer getMusteriId() { return musteriId; }
     public void setMusteriId(Integer musteriId) { this.musteriId = musteriId; }
+    public String getMusteriAdi() { return musteriAdi; }
+    public void setMusteriAdi(String musteriAdi) { this.musteriAdi = musteriAdi; }
     public Musteri getMusteri() { return musteri; }
     public void setMusteri(Musteri musteri) { this.musteri = musteri; }
     public String getTeklifTarihi() { return teklifTarihi; }

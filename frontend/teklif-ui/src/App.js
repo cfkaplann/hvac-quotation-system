@@ -43,7 +43,7 @@ export default function App() {
   if (!kullanici) return <GirisPage onGiris={setKullanici} />;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-layout">
       <Sidebar page={page} setPage={setPage} stats={stats} kullanici={kullanici} onCikis={cikisYap} />
       <main style={{ flex: 1, overflow: 'auto' }}>
         {page === 'teklifler'   && <TekliflerPage onStatsChange={setStats} kullanici={kullanici} />}

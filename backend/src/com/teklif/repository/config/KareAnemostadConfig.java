@@ -153,7 +153,7 @@ public class KareAnemostadConfig {
             new UrunKart(
                 "KANM_2YON",
                 UrunKategori.KARE_ANEMOSTAD,
-                "Qua 2W",
+                "İki Yönlü Kare Anemostad",
 
                 List.of(OzellikTipi.MENFEZ_TIPI,
                         OzellikTipi.RAL,
@@ -206,7 +206,7 @@ public class KareAnemostadConfig {
             new UrunKart(
                 "KANM_3YON",
                 UrunKategori.KARE_ANEMOSTAD,
-                "Qua 3W",
+                "Üç Yönlü Kare Anemostad",
 
                 List.of(OzellikTipi.MENFEZ_TIPI,
                         OzellikTipi.RAL,

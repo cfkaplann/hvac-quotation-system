@@ -20,7 +20,7 @@ public class DaireselAnemostadConfig {
 								OzellikTipi.MONTAJ, List.of("Vidalı", "Spot Yaylı"),
 								OzellikTipi.DAMPER_TIPI, List.of("Dampersiz", "Kelebek Kanat Damperli")),
 						List.of(OlcuAlanTipi.NETIC_CAP),
-						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "120", "150", "160", "200", "250", "315")),
+						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "150", "200", "250", "300", "350", "400","450","500","550")),
 						false, null),
 
 				new UrunKart("DANM_GEMI", UrunKategori.DAIRESEL_ANEMOSTAD, "Gemici Anemostad",
@@ -28,7 +28,7 @@ public class DaireselAnemostadConfig {
 						Map.of(OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"),
 								OzellikTipi.MONTAJ, List.of("Vidalı", "Spot Yaylı")),
 						List.of(OlcuAlanTipi.NETIC_CAP),
-						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "120", "150", "200")),
+						Map.of(OlcuAlanTipi.NETIC_CAP, List.of("100", "125", "150", "200")),
 						false, null)
 		);
 	}

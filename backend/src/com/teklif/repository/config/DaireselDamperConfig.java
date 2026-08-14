@@ -30,7 +30,7 @@ public class DaireselDamperConfig {
 						List.of(OlcuAlanTipi.CAP)),
 
 				new UrunKart("DAIDMP_GALKLAYAN", UrunKategori.DAIRESEL_DAMPER,
-						"Dairesel Galvaniz Klapeli Yangın Damperi", List.of(
+						"Dairesel Galvaniz Klapeli Yangın Damperi (Belgesiz)", List.of(
 
 								OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),
 						Map.of(
@@ -67,7 +67,7 @@ public class DaireselDamperConfig {
 						// 🔥 ZORUNLU ÖLÇÜLER
 						List.of(OlcuAlanTipi.CAP)),
 
-				new UrunKart("DAIDMP_BLADRA", UrunKategori.DAIRESEL_DAMPER, "Black Draft Damper",
+				new UrunKart("DAIDMP_BLADRA", UrunKategori.DAIRESEL_DAMPER, "Back Draft Damper",
 						List.of(OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ), Map.of(
 
 								OzellikTipi.MONTAJ, List.of("Vidalı", "Spot Yaylı"),

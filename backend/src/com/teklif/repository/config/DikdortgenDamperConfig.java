@@ -32,7 +32,7 @@ public class DikdortgenDamperConfig {
 						// 🔥 ZORUNLU ÖLÇÜLER
 						List.of(OlcuAlanTipi.GENISLIK, OlcuAlanTipi.YUKSEKLIK)),
 
-				new UrunKart("DMP_BLADRA", UrunKategori.DIKDORTGEN_DAMPER, "Black Draft Damper",
+				new UrunKart("DMP_BLADRA", UrunKategori.DIKDORTGEN_DAMPER, "Back Draft Damper",
 						List.of(OzellikTipi.MENFEZ_TIPI,
 
 								OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),
@@ -65,7 +65,7 @@ public class DikdortgenDamperConfig {
 						true   // ⭐ PANJUR = AKSESUAR TEKLİ
 						),
 
-				new UrunKart("DMP_YAN", UrunKategori.DIKDORTGEN_DAMPER, "Yangın Damperi", List.of(
+				new UrunKart("DMP_YAN", UrunKategori.DIKDORTGEN_DAMPER, "Yangın Damperi (Belgesiz)", List.of(
 
 						OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),
 						Map.of(
@@ -89,7 +89,7 @@ public class DikdortgenDamperConfig {
 						// 🔥 ZORUNLU ÖLÇÜLER
 						List.of(OlcuAlanTipi.GENISLIK, OlcuAlanTipi.YUKSEKLIK)),
 
-				new UrunKart("DMP_DUMTAH", UrunKategori.DIKDORTGEN_DAMPER, "Duman Tahliye Damperi",
+				new UrunKart("DMP_DUMTAH", UrunKategori.DIKDORTGEN_DAMPER, "Duman Tahliye Damperi (Belgesiz)",
 						List.of(OzellikTipi.MENFEZ_TIPI,
 
 								OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),

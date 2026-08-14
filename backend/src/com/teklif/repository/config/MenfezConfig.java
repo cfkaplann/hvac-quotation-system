@@ -110,13 +110,11 @@ public class MenfezConfig {
 						List.of(OlcuAlanTipi.GENISLIK, OlcuAlanTipi.YUKSEKLIK)),
 
 				new UrunKart("MNZ_LINE", UrunKategori.MENFEZ, "Lineer Menfez",
-						List.of(OzellikTipi.MENFEZ_TIPI, OzellikTipi.CERCEVE_TIPI, OzellikTipi.RAL,
-								OzellikTipi.DAMPER_TIPI, OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),
+						List.of(OzellikTipi.CERCEVE_TIPI, OzellikTipi.RAL, OzellikTipi.DAMPER_TIPI,
+								OzellikTipi.AKSESUAR_TIPI, OzellikTipi.MONTAJ),
 						Map.of(OzellikTipi.CERCEVE_TIPI, List.of("32 mm", "28 mm", "22 mm", "17 mm"),
 
 								OzellikTipi.DAMPER_TIPI, List.of("Dampersiz", "Paralel Damperli", "Zıt Damperli"),
-
-								OzellikTipi.MENFEZ_TIPI, List.of("17° Açılı", "30° Açılı", "Damla Kanatlı "),
 
 								OzellikTipi.RAL, List.of("Boyasız", "Eloksal", "Boyalı"),
 

@@ -14,11 +14,9 @@ public class SchemaInitializer {
             st.execute("CREATE TABLE IF NOT EXISTS price_cell (table_id INTEGER, row_value REAL, col_value REAL, row_value_str TEXT, col_value_str TEXT, price REAL);");
             st.execute("CREATE TABLE IF NOT EXISTS feature_ratio (feature_type TEXT, option_name TEXT, ratio REAL, is_sabit INTEGER DEFAULT 0, PRIMARY KEY(feature_type, option_name));");
 
-            // Migration
             try { st.execute("ALTER TABLE feature_ratio ADD COLUMN is_sabit INTEGER DEFAULT 0;"); } catch (Exception ignored) {}
             try { st.execute("ALTER TABLE feature_ratio ADD COLUMN urun_kategori TEXT DEFAULT NULL;"); } catch (Exception ignored) {}
 
-            // feature_ratio_v2 (kategori bazlı oranlar)
             st.execute("""
                 CREATE TABLE IF NOT EXISTS feature_ratio_v2 (
                     feature_type   TEXT NOT NULL,
@@ -29,10 +27,8 @@ public class SchemaInitializer {
                     PRIMARY KEY(feature_type, option_name, urun_kategori)
                 );""");
 
-            // feature_ratio_v2 migration
             try { st.execute("ALTER TABLE feature_ratio_v2 ADD COLUMN urun_kodu TEXT DEFAULT NULL;"); } catch (Exception ignored) {}
 
-            // feature_ratio_v3 (ürün bazlı oranlar)
             st.execute("""
                 CREATE TABLE IF NOT EXISTS feature_ratio_v3 (
                     feature_type   TEXT NOT NULL,
@@ -44,7 +40,6 @@ public class SchemaInitializer {
                     PRIMARY KEY(feature_type, option_name, urun_kategori, urun_kodu)
                 );""");
 
-            // Eski verileri taşı — sadece henüz taşınmamışsa
             try {
                 st.execute("""
                     INSERT OR IGNORE INTO feature_ratio_v2(feature_type,option_name,urun_kategori,ratio,is_sabit)
@@ -67,7 +62,6 @@ public class SchemaInitializer {
                 """);
             } catch (Exception ignored) {}
 
-            // Tekrarlı kayıtları temizle
             try {
                 st.execute("""
                     DELETE FROM feature_ratio_v2
@@ -79,7 +73,6 @@ public class SchemaInitializer {
                 """);
             } catch (Exception ignored) {}
 
-            // Seed
             try (java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM feature_ratio")) {
                 if (rs.next() && rs.getInt(1) == 0) seedFeatureRatios(conn);
             }
@@ -103,6 +96,7 @@ public class SchemaInitializer {
                     revize_no         INTEGER NOT NULL DEFAULT 0,
                     is_adi            TEXT NOT NULL,
                     musteri_id        INTEGER REFERENCES musteri(id),
+                    musteri_adi       TEXT,
                     teklif_tarihi     TEXT NOT NULL,
                     gecerlilik_tarihi TEXT,
                     teklifi_veren     TEXT,
@@ -168,6 +162,10 @@ public class SchemaInitializer {
 
             st.execute("INSERT OR IGNORE INTO kullanici (kullanici_adi, sifre_hash, ad_soyad, rol) VALUES ('admin', 'admin123', 'Sistem Yöneticisi', 'ADMIN')");
 
+            try { st.execute("ALTER TABLE teklif ADD COLUMN musteri_adi TEXT"); } catch (Exception ignored) {}
+            try { st.execute("ALTER TABLE urun_tanim ADD COLUMN ticari_kod TEXT DEFAULT NULL"); } catch (Exception ignored) {}
+            st.execute("CREATE TABLE IF NOT EXISTS ticari_kod_map (urun_kod TEXT PRIMARY KEY, ticari_kod TEXT NOT NULL);");
+
             String[] alterlar = {
                 "ALTER TABLE teklif_kalem ADD COLUMN genislik TEXT",
                 "ALTER TABLE teklif_kalem ADD COLUMN yukseklik TEXT",
@@ -192,14 +190,15 @@ public class SchemaInitializer {
 
             st.execute("""
                 CREATE TABLE IF NOT EXISTS urun_tanim (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    kod             TEXT NOT NULL UNIQUE,
-                    ad              TEXT NOT NULL,
-                    kategori        TEXT NOT NULL,
-                    zorunlu_olcular TEXT NOT NULL DEFAULT '[]',
-                    ozellik_tipleri TEXT NOT NULL DEFAULT '[]',
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    kod              TEXT NOT NULL UNIQUE,
+                    ad               TEXT NOT NULL,
+                    kategori         TEXT NOT NULL,
+                    zorunlu_olcular  TEXT NOT NULL DEFAULT '[]',
+                    ozellik_tipleri  TEXT NOT NULL DEFAULT '[]',
                     fiyat_stratejisi TEXT NOT NULL DEFAULT 'WH',
-                    aktif           INTEGER NOT NULL DEFAULT 1
+                    ticari_kod       TEXT,
+                    aktif            INTEGER NOT NULL DEFAULT 1
                 );""");
 
             st.execute("""
@@ -234,7 +233,6 @@ public class SchemaInitializer {
                 );""");
             st.execute("INSERT OR IGNORE INTO sistem_ayar(anahtar,deger,aciklama) VALUES('yay_fiyati','0','Spot Yaylı için yay fiyatı (TL)')");
 
-            // Sequence'i mevcut max teklif nosuna göre düzelt
             try {
                 int yil = java.time.LocalDate.now().getYear();
                 java.sql.ResultSet rsSeq = st.executeQuery(
@@ -273,6 +271,7 @@ public class SchemaInitializer {
                 {"MONTAJ","Boğazdan Vidalı",0.00,1},{"MONTAJ","Hava Kanalına Montaj",0.00,1},
                 {"MONTAJ","Duvar Geçiş Parçası İle Montaj",0.00,1},
                 {"MONTAJ","Şaft Duvarı Üzerine Vidalı Montaj",0.00,1},{"MONTAJ","Civatalı",0.00,1},
+                {"MONTAJ","Göbekten Vidalı",0.00,1},
                 {"AKSESUAR_TIPI","Galvaniz Telli",0.15,0},{"AKSESUAR_TIPI","Contalı",0.02,0},
                 {"AKSESUAR_TIPI","Manuel Kollu",0.00,1},{"AKSESUAR_TIPI","Servo Motor 24V",0.00,1},
                 {"AKSESUAR_TIPI","Servo Motor 230V",0.00,1},{"AKSESUAR_TIPI","Limit Switch",0.00,1},
